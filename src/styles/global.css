@@ -198,6 +198,52 @@ h3 {
   background: #ffefef;
 }
 
+.fill-section {
+  padding-top: 1rem;
+  border-top: 1px solid #d5dde5;
+}
+
+.fill-summary {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border: 1px solid #d8e0e8;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.fill-summary dl {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.fill-summary dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.fill-summary dt {
+  color: #5d6976;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.fill-summary dd {
+  margin: 0;
+  color: #17212b;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.warning-text {
+  color: #9a2f21;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
 .status-panel {
   display: grid;
   grid-template-columns: auto repeat(4, minmax(120px, 1fr)) minmax(220px, 1.5fr);
