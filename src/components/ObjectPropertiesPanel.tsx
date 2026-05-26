@@ -1,7 +1,13 @@
-import type { DimensionsMm, PackingObject, RotationDeg, Vector3Mm } from '../types';
+import type { DimensionsMm, GridPackingResult, PackingObject, RotationDeg, Vector3Mm } from '../types';
+import { formatNumber } from '../utils/unitConversion';
 
 interface ObjectPropertiesPanelProps {
   selectedObject: PackingObject | null;
+  fillSpacingMm: number;
+  lastPackingResult: GridPackingResult | null;
+  onFillSpacingChange: (spacingMm: number) => void;
+  onFillContainer: () => void;
+  onClearAutoFill: () => void;
   onUpdateObject: (object: PackingObject) => void;
   onDeleteObject: (id: string) => void;
 }
@@ -17,6 +23,11 @@ const numberValue = (value: string): number => {
 
 export function ObjectPropertiesPanel({
   selectedObject,
+  fillSpacingMm,
+  lastPackingResult,
+  onFillSpacingChange,
+  onFillContainer,
+  onClearAutoFill,
   onUpdateObject,
   onDeleteObject,
 }: ObjectPropertiesPanelProps) {
@@ -173,6 +184,64 @@ export function ObjectPropertiesPanel({
             />
           </label>
         </div>
+      </div>
+
+      <div className="section fill-section">
+        <h3>Fill container</h3>
+        <label className="field">
+          <span>Spacing mm</span>
+          <input
+            type="number"
+            min="0"
+            value={fillSpacingMm}
+            onChange={(event) => onFillSpacingChange(Math.max(0, numberValue(event.target.value)))}
+          />
+        </label>
+        <div className="button-stack">
+          <button type="button" onClick={onFillContainer}>
+            Fill container
+          </button>
+          <button type="button" onClick={onClearAutoFill}>
+            Clear auto-fill
+          </button>
+        </div>
+        {lastPackingResult ? (
+          <div className="fill-summary">
+            {lastPackingResult.warning ? <p className="warning-text">{lastPackingResult.warning}</p> : null}
+            <dl>
+              <div>
+                <dt>Grid</dt>
+                <dd>
+                  {lastPackingResult.countX} x {lastPackingResult.countY} x {lastPackingResult.countZ}
+                </dd>
+              </div>
+              <div>
+                <dt>Geometrical capacity</dt>
+                <dd>{lastPackingResult.totalQuantity} objects</dd>
+              </div>
+              <div>
+                <dt>Payload-limited capacity</dt>
+                <dd>{lastPackingResult.payloadLimitedQuantity} objects</dd>
+              </div>
+              <div>
+                <dt>Geometrical total weight</dt>
+                <dd>{formatNumber(lastPackingResult.totalWeight)} kg</dd>
+              </div>
+              <div>
+                <dt>Remaining payload</dt>
+                <dd>{formatNumber(lastPackingResult.remainingPayload)} kg</dd>
+              </div>
+              <div>
+                <dt>Payload status</dt>
+                <dd>{lastPackingResult.exceedsPayload ? 'Exceeds payload limit' : 'Within payload limit'}</dd>
+              </div>
+              <div>
+                <dt>Volume utilization</dt>
+                <dd>{formatNumber(lastPackingResult.volumeUtilizationPercent)}%</dd>
+              </div>
+            </dl>
+          </div>
+        ) : null}
       </div>
 
       <button type="button" className="danger-button" onClick={() => onDeleteObject(selectedObject.id)}>
