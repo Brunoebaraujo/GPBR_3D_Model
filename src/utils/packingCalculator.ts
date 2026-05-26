@@ -59,19 +59,16 @@ export const calculateGridPacking = (
     containerVolume > 0 ? ((getObjectVolume(object) * totalQuantity) / containerVolume) * 100 : 0;
 
   const positions: Vector3Mm[] = [];
-  const usedWidth = countX * objectWidth + Math.max(0, countX - 1) * spacing;
-  const usedDepth = countY * objectDepth + Math.max(0, countY - 1) * spacing;
+  const startX = -internalWidth / 2 + objectWidth / 2;
+  const startZ = -internalDepth / 2 + objectDepth / 2;
 
-  const startX = -usedWidth / 2 + objectWidth / 2;
-  const startZ = -usedDepth / 2 + objectDepth / 2;
-
-  for (let zIndex = 0; zIndex < countZ; zIndex += 1) {
-    for (let yIndex = 0; yIndex < countY; yIndex += 1) {
+  for (let heightIndex = 0; heightIndex < countZ; heightIndex += 1) {
+    for (let depthIndex = 0; depthIndex < countY; depthIndex += 1) {
       for (let xIndex = 0; xIndex < countX; xIndex += 1) {
         positions.push({
           x: startX + xIndex * (objectWidth + spacing),
-          y: objectHeight / 2 + zIndex * (objectHeight + spacing),
-          z: startZ + yIndex * (objectDepth + spacing),
+          y: objectHeight / 2 + heightIndex * (objectHeight + spacing),
+          z: startZ + depthIndex * (objectDepth + spacing),
         });
       }
     }
