@@ -1,11 +1,16 @@
 import { Canvas } from '@react-three/fiber';
 import { Grid, OrbitControls, PerspectiveCamera, TransformControls } from '@react-three/drei';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Mesh } from 'three';
 import type { PackingObject, TransformMode } from '../types';
 import { MB5Container } from './MB5Container';
 import { PackingObject as PackingObjectMesh } from './PackingObject';
 import { radiansToDegrees, threeUnitsToMm } from '../utils/unitConversion';
+
+type TransformControlsRef = {
+  addEventListener: (type: 'dragging-changed', listener: (event: { value: boolean }) => void) => void;
+  removeEventListener: (type: 'dragging-changed', listener: (event: { value: boolean }) => void) => void;
+};
 
 interface Scene3DProps {
   objects: PackingObject[];
@@ -33,6 +38,14 @@ function ControlledPackingObject({
   onDraggingChange,
 }: ControlledPackingObjectProps) {
   const objectRef = useRef<Mesh>(null);
+  const transformControlsRef = useRef<TransformControlsRef | null>(null);
+
+  const handleDraggingChanged = useCallback(
+    (event: { value: boolean }) => {
+      onDraggingChange(event.value);
+    },
+    [onDraggingChange],
+  );
 
   useEffect(() => {
     if (!objectRef.current) {
@@ -52,6 +65,20 @@ function ControlledPackingObject({
       );
     }
   }, [object.position.x, object.position.y, object.position.z]);
+
+  useEffect(() => {
+    const controls = transformControlsRef.current;
+
+    if (!controls) {
+      return;
+    }
+
+    controls.addEventListener('dragging-changed', handleDraggingChanged);
+
+    return () => {
+      controls.removeEventListener('dragging-changed', handleDraggingChanged);
+    };
+  }, [handleDraggingChanged]);
 
   const syncTransform = () => {
     if (!objectRef.current) {
@@ -90,11 +117,7 @@ function ControlledPackingObject({
   }
 
   return (
-    <TransformControls
-      mode={transformMode}
-      onDraggingChanged={(event) => onDraggingChange(event.value as boolean)}
-      onObjectChange={syncTransform}
-    >
+    <TransformControls ref={transformControlsRef} mode={transformMode} onObjectChange={syncTransform}>
       {objectElement}
     </TransformControls>
   );
