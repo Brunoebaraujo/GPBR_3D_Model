@@ -7,11 +7,6 @@ import { MB5Container } from './MB5Container';
 import { PackingObject as PackingObjectMesh } from './PackingObject';
 import { radiansToDegrees, threeUnitsToMm } from '../utils/unitConversion';
 
-type TransformControlsRef = {
-  addEventListener: (type: 'dragging-changed', listener: (event: { value: boolean }) => void) => void;
-  removeEventListener: (type: 'dragging-changed', listener: (event: { value: boolean }) => void) => void;
-};
-
 interface Scene3DProps {
   objects: PackingObject[];
   selectedObjectId: string | null;
@@ -38,7 +33,7 @@ function ControlledPackingObject({
   onDraggingChange,
 }: ControlledPackingObjectProps) {
   const objectRef = useRef<Mesh>(null);
-  const transformControlsRef = useRef<TransformControlsRef | null>(null);
+  const transformControlsRef = useRef<any>(null);
 
   const handleDraggingChanged = useCallback(
     (event: { value: boolean }) => {
