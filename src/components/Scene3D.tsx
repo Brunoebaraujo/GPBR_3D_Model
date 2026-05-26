@@ -1,16 +1,115 @@
 import { Canvas } from '@react-three/fiber';
-import { Grid, OrbitControls, PerspectiveCamera } from '@react-three/drei';
-import type { PackingObject } from '../types';
+import { Grid, OrbitControls, PerspectiveCamera, TransformControls } from '@react-three/drei';
+import { useEffect, useRef, useState } from 'react';
+import type { Mesh } from 'three';
+import type { PackingObject, TransformMode } from '../types';
 import { MB5Container } from './MB5Container';
 import { PackingObject as PackingObjectMesh } from './PackingObject';
+import { radiansToDegrees, threeUnitsToMm } from '../utils/unitConversion';
 
 interface Scene3DProps {
   objects: PackingObject[];
   selectedObjectId: string | null;
+  transformMode: TransformMode;
   onSelectObject: (id: string | null) => void;
+  onUpdateObject: (object: PackingObject) => void;
 }
 
-export function Scene3D({ objects, selectedObjectId, onSelectObject }: Scene3DProps) {
+interface ControlledPackingObjectProps {
+  object: PackingObject;
+  isSelected: boolean;
+  transformMode: TransformMode;
+  onSelectObject: (id: string) => void;
+  onUpdateObject: (object: PackingObject) => void;
+  onDraggingChange: (isDragging: boolean) => void;
+}
+
+function ControlledPackingObject({
+  object,
+  isSelected,
+  transformMode,
+  onSelectObject,
+  onUpdateObject,
+  onDraggingChange,
+}: ControlledPackingObjectProps) {
+  const objectRef = useRef<Mesh>(null);
+
+  useEffect(() => {
+    if (!objectRef.current) {
+      return;
+    }
+
+    const { x, y, z } = objectRef.current.position;
+    if (
+      Math.abs(threeUnitsToMm(x) - object.position.x) > 0.5 ||
+      Math.abs(threeUnitsToMm(y) - object.position.y) > 0.5 ||
+      Math.abs(threeUnitsToMm(z) - object.position.z) > 0.5
+    ) {
+      objectRef.current.position.set(
+        object.position.x / 1000,
+        object.position.y / 1000,
+        object.position.z / 1000,
+      );
+    }
+  }, [object.position.x, object.position.y, object.position.z]);
+
+  const syncTransform = () => {
+    if (!objectRef.current) {
+      return;
+    }
+
+    const position = objectRef.current.position;
+    const rotation = objectRef.current.rotation;
+
+    onUpdateObject({
+      ...object,
+      position: {
+        x: Math.round(threeUnitsToMm(position.x)),
+        y: Math.round(threeUnitsToMm(position.y)),
+        z: Math.round(threeUnitsToMm(position.z)),
+      },
+      rotation: {
+        x: Math.round(radiansToDegrees(rotation.x)),
+        y: Math.round(radiansToDegrees(rotation.y)),
+        z: Math.round(radiansToDegrees(rotation.z)),
+      },
+    });
+  };
+
+  const objectElement = (
+    <PackingObjectMesh
+      ref={objectRef}
+      object={object}
+      isSelected={isSelected}
+      onSelect={onSelectObject}
+    />
+  );
+
+  if (!isSelected) {
+    return objectElement;
+  }
+
+  return (
+    <TransformControls
+      mode={transformMode}
+      onMouseDown={() => onDraggingChange(true)}
+      onMouseUp={() => onDraggingChange(false)}
+      onObjectChange={syncTransform}
+    >
+      {objectElement}
+    </TransformControls>
+  );
+}
+
+export function Scene3D({
+  objects,
+  selectedObjectId,
+  transformMode,
+  onSelectObject,
+  onUpdateObject,
+}: Scene3DProps) {
+  const [isTransformDragging, setIsTransformDragging] = useState(false);
+
   return (
     <div className="scene-shell">
       <Canvas shadows onPointerMissed={() => onSelectObject(null)}>
@@ -20,11 +119,14 @@ export function Scene3D({ objects, selectedObjectId, onSelectObject }: Scene3DPr
         <directionalLight position={[3, 5, 4]} intensity={1.3} castShadow />
         <MB5Container />
         {objects.map((object) => (
-          <PackingObjectMesh
+          <ControlledPackingObject
             key={object.id}
             object={object}
             isSelected={object.id === selectedObjectId}
-            onSelect={onSelectObject}
+            transformMode={transformMode}
+            onSelectObject={onSelectObject}
+            onUpdateObject={onUpdateObject}
+            onDraggingChange={setIsTransformDragging}
           />
         ))}
         <Grid
@@ -37,7 +139,7 @@ export function Scene3D({ objects, selectedObjectId, onSelectObject }: Scene3DPr
           fadeStrength={1}
           infiniteGrid
         />
-        <OrbitControls enablePan enableZoom makeDefault />
+        <OrbitControls enablePan enableZoom enabled={!isTransformDragging} makeDefault />
       </Canvas>
     </div>
   );
