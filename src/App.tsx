@@ -4,11 +4,16 @@ import { Scene3D } from './components/Scene3D';
 import { Sidebar } from './components/Sidebar';
 import { StatusPanel } from './components/StatusPanel';
 import { MB5_CONTAINER, STARTER_OBJECTS } from './data/skus';
-import type { PackingObject, PackingObjectType } from './types';
+import type { PackingObject, PackingObjectType, TransformMode } from './types';
 import { validateFit } from './utils/fitValidation';
 import { calculateGridPacking } from './utils/packingCalculator';
 
 const COLORS = ['#2f80ed', '#00a878', '#f2994a', '#9b51e0', '#eb5757', '#2d9cdb'];
+const DEFAULT_STAGING_POSITION = {
+  x: -390,
+  y: 125,
+  z: -1200,
+};
 
 const createPackingObject = (type: PackingObjectType, index: number): PackingObject => {
   const baseSize = type === 'cube' ? 250 : 320;
@@ -24,11 +29,7 @@ const createPackingObject = (type: PackingObjectType, index: number): PackingObj
       height,
     },
     weightKg: 50,
-    position: {
-      x: 0,
-      y: height / 2,
-      z: 0,
-    },
+    position: DEFAULT_STAGING_POSITION,
     rotation: {
       x: 0,
       y: 0,
@@ -42,6 +43,7 @@ export default function App() {
   const [objects, setObjects] = useState<PackingObject[]>(STARTER_OBJECTS);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(STARTER_OBJECTS[0]?.id ?? null);
   const [fillSpacingMm, setFillSpacingMm] = useState(0);
+  const [transformMode, setTransformMode] = useState<TransformMode>('translate');
   const [lastPackingResult, setLastPackingResult] = useState<ReturnType<typeof calculateGridPacking> | null>(
     null,
   );
@@ -119,7 +121,9 @@ export default function App() {
         <Scene3D
           objects={objects}
           selectedObjectId={selectedObjectId}
+          transformMode={transformMode}
           onSelectObject={setSelectedObjectId}
+          onUpdateObject={updateObject}
         />
         <StatusPanel validation={validation} />
       </section>
@@ -127,6 +131,8 @@ export default function App() {
         selectedObject={selectedObject}
         fillSpacingMm={fillSpacingMm}
         lastPackingResult={lastPackingResult}
+        transformMode={transformMode}
+        onTransformModeChange={setTransformMode}
         onFillSpacingChange={setFillSpacingMm}
         onFillContainer={fillContainer}
         onClearAutoFill={clearAutoFill}
