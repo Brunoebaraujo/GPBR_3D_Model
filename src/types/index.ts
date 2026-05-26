@@ -1,5 +1,7 @@
 export type PackingObjectType = 'block' | 'cube' | 'cylinder';
 
+export type TransformMode = 'translate' | 'rotate';
+
 export interface DimensionsMm {
   width: number;
   depth: number;
