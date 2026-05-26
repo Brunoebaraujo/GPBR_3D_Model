@@ -186,6 +186,18 @@ h3 {
   gap: 0.55rem;
 }
 
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.segmented-control button.active {
+  color: #ffffff;
+  border-color: #2f80ed;
+  background: #2f80ed;
+}
+
 .danger-button {
   margin-top: auto;
   color: #8a1f1f;
