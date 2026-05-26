@@ -1,0 +1,295 @@
+:root {
+  color: #16202a;
+  background: #dfe5ea;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  border: 1px solid #b5c0ca;
+  border-radius: 6px;
+  padding: 0.72rem 0.85rem;
+  color: #17212b;
+  background: #ffffff;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+
+button:hover {
+  border-color: #2f80ed;
+  background: #f4f8fd;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #b8c3ce;
+  border-radius: 6px;
+  padding: 0.58rem 0.65rem;
+  color: #18232f;
+  background: #ffffff;
+}
+
+input:focus {
+  border-color: #2f80ed;
+  outline: 2px solid rgba(47, 128, 237, 0.16);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+h3 {
+  font-size: 0.85rem;
+  line-height: 1.25;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(230px, 280px) minmax(0, 1fr) minmax(280px, 340px);
+  width: 100vw;
+  min-height: 100vh;
+  background: #dfe5ea;
+}
+
+.workspace {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 100vh;
+  border-inline: 1px solid #c1cad3;
+}
+
+.scene-shell {
+  min-width: 0;
+  min-height: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-height: 100vh;
+  padding: 1.25rem;
+  overflow-y: auto;
+  background: #f7f9fb;
+}
+
+.sidebar {
+  border-right: 1px solid #c5ced7;
+}
+
+.properties-panel {
+  border-left: 1px solid #c5ced7;
+}
+
+.eyebrow {
+  margin-bottom: 0.35rem;
+  color: #5e6b78;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.muted {
+  color: #65717e;
+  line-height: 1.5;
+}
+
+.spec-list {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+}
+
+.spec-list div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.spec-list dt {
+  color: #596775;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.spec-list dd {
+  margin: 0;
+  color: #17212b;
+  font-size: 0.92rem;
+}
+
+.section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.button-stack {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.field span {
+  color: #506070;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.grid-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.danger-button {
+  margin-top: auto;
+  color: #8a1f1f;
+  border-color: #e4b5b5;
+  background: #fff7f7;
+}
+
+.danger-button:hover {
+  border-color: #c83737;
+  background: #ffefef;
+}
+
+.status-panel {
+  display: grid;
+  grid-template-columns: auto repeat(4, minmax(120px, 1fr)) minmax(220px, 1.5fr);
+  gap: 0.85rem;
+  align-items: start;
+  min-height: 112px;
+  padding: 0.9rem 1rem;
+  border-top: 1px solid #c1cad3;
+  background: #ffffff;
+}
+
+.status-panel > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.status-panel span {
+  color: #5b6875;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.status-panel strong {
+  color: #17212b;
+  font-size: 0.95rem;
+}
+
+.status-pill {
+  align-self: start;
+  border-radius: 999px;
+  padding: 0.48rem 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-pill.positive {
+  color: #0b5f42;
+  background: #dff6ec;
+}
+
+.status-pill.negative {
+  color: #9a2f21;
+  background: #ffe8df;
+}
+
+.warnings ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1rem;
+  color: #9a2f21;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 1120px) {
+  .app-shell {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .properties-panel {
+    grid-column: 1 / -1;
+    min-height: auto;
+    border-top: 1px solid #c5ced7;
+    border-left: 0;
+  }
+
+  .status-panel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    min-height: auto;
+  }
+
+  .workspace {
+    min-height: 68vh;
+    border-inline: 0;
+  }
+
+  .scene-shell {
+    min-height: 420px;
+  }
+
+  .status-panel {
+    grid-template-columns: 1fr;
+  }
+}
