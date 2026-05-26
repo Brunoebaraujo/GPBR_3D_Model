@@ -92,8 +92,7 @@ function ControlledPackingObject({
   return (
     <TransformControls
       mode={transformMode}
-      onMouseDown={() => onDraggingChange(true)}
-      onMouseUp={() => onDraggingChange(false)}
+      onDraggingChanged={(event) => onDraggingChange(event.value as boolean)}
       onObjectChange={syncTransform}
     >
       {objectElement}
