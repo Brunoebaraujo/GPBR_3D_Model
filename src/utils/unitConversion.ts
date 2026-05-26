@@ -8,6 +8,8 @@ export const threeUnitsToMm = (value: number): number => value * MM_PER_THREE_UN
 
 export const degreesToRadians = (degrees: number): number => (degrees * Math.PI) / 180;
 
+export const radiansToDegrees = (radians: number): number => (radians * 180) / Math.PI;
+
 export const rotationDegreesToRadians = (rotation: RotationDeg): [number, number, number] => [
   degreesToRadians(rotation.x),
   degreesToRadians(rotation.y),
