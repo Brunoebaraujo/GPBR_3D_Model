@@ -1,5 +1,7 @@
 import { Edges } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
+import { forwardRef } from 'react';
+import type { Mesh } from 'three';
 import type { PackingObject as PackingObjectType } from '../types';
 import { mmToThreeUnits, rotationDegreesToRadians } from '../utils/unitConversion';
 
@@ -9,7 +11,10 @@ interface PackingObjectProps {
   onSelect: (id: string) => void;
 }
 
-export function PackingObject({ object, isSelected, onSelect }: PackingObjectProps) {
+export const PackingObject = forwardRef<Mesh, PackingObjectProps>(function PackingObject(
+  { object, isSelected, onSelect },
+  ref,
+) {
   const { width, depth, height } = object.dimensions;
 
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
@@ -19,6 +24,7 @@ export function PackingObject({ object, isSelected, onSelect }: PackingObjectPro
 
   return (
     <mesh
+      ref={ref}
       position={[
         mmToThreeUnits(object.position.x),
         mmToThreeUnits(object.position.y),
@@ -51,4 +57,4 @@ export function PackingObject({ object, isSelected, onSelect }: PackingObjectPro
       <Edges color={isSelected ? '#f5c542' : '#20262d'} />
     </mesh>
   );
-}
+});
