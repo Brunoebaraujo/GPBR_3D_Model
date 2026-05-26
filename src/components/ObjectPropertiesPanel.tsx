@@ -1,10 +1,19 @@
-import type { DimensionsMm, GridPackingResult, PackingObject, RotationDeg, Vector3Mm } from '../types';
+import type {
+  DimensionsMm,
+  GridPackingResult,
+  PackingObject,
+  RotationDeg,
+  TransformMode,
+  Vector3Mm,
+} from '../types';
 import { formatNumber } from '../utils/unitConversion';
 
 interface ObjectPropertiesPanelProps {
   selectedObject: PackingObject | null;
   fillSpacingMm: number;
   lastPackingResult: GridPackingResult | null;
+  transformMode: TransformMode;
+  onTransformModeChange: (mode: TransformMode) => void;
   onFillSpacingChange: (spacingMm: number) => void;
   onFillContainer: () => void;
   onClearAutoFill: () => void;
@@ -25,6 +34,8 @@ export function ObjectPropertiesPanel({
   selectedObject,
   fillSpacingMm,
   lastPackingResult,
+  transformMode,
+  onTransformModeChange,
   onFillSpacingChange,
   onFillContainer,
   onClearAutoFill,
@@ -92,6 +103,26 @@ export function ObjectPropertiesPanel({
           onChange={(event) => update({ weightKg: Math.max(0, numberValue(event.target.value)) })}
         />
       </label>
+
+      <div className="section">
+        <h3>Mouse transform</h3>
+        <div className="segmented-control">
+          <button
+            type="button"
+            className={transformMode === 'translate' ? 'active' : ''}
+            onClick={() => onTransformModeChange('translate')}
+          >
+            Translate
+          </button>
+          <button
+            type="button"
+            className={transformMode === 'rotate' ? 'active' : ''}
+            onClick={() => onTransformModeChange('rotate')}
+          >
+            Rotate
+          </button>
+        </div>
+      </div>
 
       <div className="section">
         <h3>Dimensions mm</h3>
