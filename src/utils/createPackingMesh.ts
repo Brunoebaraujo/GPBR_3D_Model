@@ -9,22 +9,18 @@ export const createPackingMesh = (object: PackingObject, position?: Vector3Mm): 
   const geometry =
     object.type === 'cylinder'
       ? new CylinderGeometry(width / 2, width / 2, height, 40)
-      : new BoxGeometry(width, depth, height);
-
-  if (object.type === 'cylinder') {
-    geometry.rotateX(Math.PI / 2);
-  }
+      : new BoxGeometry(width, height, depth);
 
   const mesh = new Mesh(geometry, material);
   mesh.rotation.set(
     degreesToRadians(object.rotation.x),
-    degreesToRadians(object.rotation.y),
     degreesToRadians(object.rotation.z),
+    degreesToRadians(object.rotation.y),
     'XYZ',
   );
 
   if (position) {
-    mesh.position.set(position.x, position.y, position.z);
+    mesh.position.set(position.x, position.z, position.y);
   }
 
   mesh.updateMatrixWorld(true);
