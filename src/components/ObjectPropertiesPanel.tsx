@@ -1,6 +1,7 @@
 import type {
   DimensionsMm,
   GridPackingResult,
+  OrientationOptimizationResult,
   PackingObject,
   RotationDeg,
   TransformMode,
@@ -12,10 +13,12 @@ interface ObjectPropertiesPanelProps {
   selectedObject: PackingObject | null;
   fillSpacingMm: number;
   lastPackingResult: GridPackingResult | null;
+  orientationResult: OrientationOptimizationResult | null;
   transformMode: TransformMode;
   onTransformModeChange: (mode: TransformMode) => void;
   onFillSpacingChange: (spacingMm: number) => void;
   onFillContainer: () => void;
+  onFindBestOrientation: () => void;
   onClearAutoFill: () => void;
   onUpdateObject: (object: PackingObject) => void;
   onDeleteObject: (id: string) => void;
@@ -34,10 +37,12 @@ export function ObjectPropertiesPanel({
   selectedObject,
   fillSpacingMm,
   lastPackingResult,
+  orientationResult,
   transformMode,
   onTransformModeChange,
   onFillSpacingChange,
   onFillContainer,
+  onFindBestOrientation,
   onClearAutoFill,
   onUpdateObject,
   onDeleteObject,
@@ -229,6 +234,9 @@ export function ObjectPropertiesPanel({
           />
         </label>
         <div className="button-stack">
+          <button type="button" onClick={onFindBestOrientation}>
+            Find best orientation
+          </button>
           <button type="button" onClick={onFillContainer}>
             Fill container
           </button>
@@ -236,6 +244,42 @@ export function ObjectPropertiesPanel({
             Clear auto-fill
           </button>
         </div>
+        {orientationResult ? (
+          <div className="fill-summary">
+            <dl>
+              <div>
+                <dt>Best rotation</dt>
+                <dd>
+                  X {orientationResult.rotation.x} / Y {orientationResult.rotation.y} / Z {orientationResult.rotation.z}
+                </dd>
+              </div>
+              <div>
+                <dt>Tested orientations</dt>
+                <dd>{orientationResult.testedCount}</dd>
+              </div>
+              <div>
+                <dt>Geometrical capacity</dt>
+                <dd>{orientationResult.packingResult.totalQuantity} objects</dd>
+              </div>
+              <div>
+                <dt>Payload-limited capacity</dt>
+                <dd>{orientationResult.packingResult.payloadLimitedQuantity} objects</dd>
+              </div>
+              <div>
+                <dt>Geometrical total weight</dt>
+                <dd>{formatNumber(orientationResult.packingResult.totalWeight)} kg</dd>
+              </div>
+              <div>
+                <dt>Volume utilization</dt>
+                <dd>{formatNumber(orientationResult.packingResult.volumeUtilizationPercent)}%</dd>
+              </div>
+              <div>
+                <dt>Selection reason</dt>
+                <dd>{orientationResult.reason}</dd>
+              </div>
+            </dl>
+          </div>
+        ) : null}
         {lastPackingResult ? (
           <div className="fill-summary">
             {lastPackingResult.warning ? <p className="warning-text">{lastPackingResult.warning}</p> : null}
