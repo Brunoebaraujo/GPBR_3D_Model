@@ -164,6 +164,45 @@ h3 {
   gap: 0.75rem;
 }
 
+.orientation-legend {
+  padding-top: 1rem;
+  border-top: 1px solid #d5dde5;
+}
+
+.legend-items {
+  display: grid;
+  gap: 0.48rem;
+}
+
+.legend-items span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #42505e;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.legend-swatch {
+  width: 0.82rem;
+  height: 0.82rem;
+  flex: 0 0 auto;
+  border: 1px solid rgba(22, 32, 42, 0.22);
+  border-radius: 3px;
+}
+
+.legend-swatch.top {
+  background: #16a05d;
+}
+
+.legend-swatch.bottom {
+  background: #e06a2d;
+}
+
+.legend-swatch.body {
+  background: #2f80ed;
+}
+
 .button-stack {
   display: grid;
   gap: 0.6rem;
