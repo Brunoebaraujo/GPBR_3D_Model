@@ -23,32 +23,31 @@ const normalizeValue = (value: number): number => {
   return Math.abs(value - nearestInteger) < EPSILON ? nearestInteger : value;
 };
 
-const normalizeVector = (vector: Vector3Mm): Vector3Mm => ({
-  x: normalizeValue(vector.x),
-  y: normalizeValue(vector.y),
-  z: normalizeValue(vector.z),
-});
-
 const disposeMesh = (mesh: ReturnType<typeof createPackingMesh>) => {
   mesh.geometry.dispose();
 };
 
+const convertThreeBoxToPackingBox = (box: Box3): Box3 =>
+  new Box3(
+    new Vector3(box.min.x, box.min.z, box.min.y),
+    new Vector3(box.max.x, box.max.z, box.max.y),
+  );
+
 export const getPackingObjectBox = (object: PackingObject, position?: Vector3Mm): Box3 => {
   const mesh = createPackingMesh(object, position);
-  const box = new Box3().setFromObject(mesh);
+  const threeBox = new Box3().setFromObject(mesh);
   disposeMesh(mesh);
 
-  return box;
+  return convertThreeBoxToPackingBox(threeBox);
 };
 
-export const getRotatedBoundingBox = (object: PackingObject): RotatedBoundingBox => {
-  const box = getPackingObjectBox(object, { x: 0, y: 0, z: 0 });
-  const size = normalizeVector(box.getSize(new Vector3()));
+const toRotatedBoundingBox = (box: Box3): RotatedBoundingBox => {
+  const size = box.getSize(new Vector3());
 
   return {
-    width: size.x,
-    depth: size.y,
-    height: size.z,
+    width: normalizeValue(size.x),
+    depth: normalizeValue(size.y),
+    height: normalizeValue(size.z),
     minX: normalizeValue(box.min.x),
     maxX: normalizeValue(box.max.x),
     minY: normalizeValue(box.min.y),
@@ -57,6 +56,9 @@ export const getRotatedBoundingBox = (object: PackingObject): RotatedBoundingBox
     maxZ: normalizeValue(box.max.z),
   };
 };
+
+export const getRotatedBoundingBox = (object: PackingObject): RotatedBoundingBox =>
+  toRotatedBoundingBox(getPackingObjectBox(object, { x: 0, y: 0, z: 0 }));
 
 export const getRotatedBoundingBoxDimensions = (object: PackingObject): DimensionsMm => {
   const { width, depth, height } = getRotatedBoundingBox(object);
@@ -64,21 +66,7 @@ export const getRotatedBoundingBoxDimensions = (object: PackingObject): Dimensio
   return { width, depth, height };
 };
 
-export const getPackingObjectBounds = (object: PackingObject, position = object.position): RotatedBoundingBox => {
-  const box = getPackingObjectBox(object, position);
-  const size = normalizeVector(box.getSize(new Vector3()));
-
-  return {
-    width: size.x,
-    depth: size.y,
-    height: size.z,
-    minX: normalizeValue(box.min.x),
-    maxX: normalizeValue(box.max.x),
-    minY: normalizeValue(box.min.y),
-    maxY: normalizeValue(box.max.y),
-    minZ: normalizeValue(box.min.z),
-    maxZ: normalizeValue(box.max.z),
-  };
-};
+export const getPackingObjectBounds = (object: PackingObject, position = object.position): RotatedBoundingBox =>
+  toRotatedBoundingBox(getPackingObjectBox(object, position));
 
 export const calculateRotatedBoundingBox = getRotatedBoundingBox;
