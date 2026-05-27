@@ -1,4 +1,12 @@
-import type { ContainerSpec, GridPackingResult, PackingObject, Vector3Mm } from '../types';
+import type {
+  ContainerSpec,
+  GridPackingResult,
+  OrientationCandidateResult,
+  OrientationOptimizationResult,
+  PackingObject,
+  RotationDeg,
+  Vector3Mm,
+} from '../types';
 import { getPackingObjectBounds, getRotatedBoundingBox } from './boundingBox';
 
 const EPSILON = 1e-6;
@@ -13,6 +21,22 @@ const isInsideBounds = (
   bounds.maxY <= limits.yMax + EPSILON &&
   bounds.minZ >= limits.zMin - EPSILON &&
   bounds.maxZ <= limits.zMax + EPSILON;
+
+const getInternalVolume = (container: ContainerSpec) => {
+  const { width, depth, height } = container.internalDimensions;
+
+  return width * depth * height;
+};
+
+const getPayloadLimitedQuantity = (
+  totalQuantity: number,
+  maxPayloadKg: number,
+  objectWeightKg: number,
+) => {
+  const weightLimitedQuantity = objectWeightKg > 0 ? Math.floor(maxPayloadKg / objectWeightKg) : totalQuantity;
+
+  return Math.min(totalQuantity, weightLimitedQuantity);
+};
 
 export const calculateGridPacking = (
   container: ContainerSpec,
@@ -99,9 +123,12 @@ export const calculateGridPacking = (
   const totalWeight = totalQuantity * object.weightKg;
   const remainingPayload = container.maxPayloadKg - totalWeight;
   const exceedsPayload = totalWeight > container.maxPayloadKg;
-  const payloadLimitedQuantity =
-    object.weightKg > 0 ? Math.floor(container.maxPayloadKg / object.weightKg) : totalQuantity;
-  const containerVolume = internalWidth * internalDepth * internalHeight;
+  const payloadLimitedQuantity = getPayloadLimitedQuantity(
+    totalQuantity,
+    container.maxPayloadKg,
+    object.weightKg,
+  );
+  const containerVolume = getInternalVolume(container);
   const objectVolume = effectiveWidth * effectiveDepth * effectiveHeight;
   const volumeUtilizationPercent =
     containerVolume > 0 ? ((objectVolume * totalQuantity) / containerVolume) * 100 : 0;
@@ -127,5 +154,73 @@ export const calculateGridPacking = (
     volumeUtilizationPercent,
     positions,
     warning: warnings.length > 0 ? warnings.join(' ') : undefined,
+  };
+};
+
+const getOrientationCandidates = (object: PackingObject): RotationDeg[] => {
+  if (object.type === 'cylinder') {
+    return [
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 90, z: 0 },
+      { x: 90, y: 0, z: 0 },
+    ];
+  }
+
+  return [0, 90].flatMap((x) =>
+    [0, 90].flatMap((y) => [0, 90].map((z) => ({ x, y, z }))),
+  );
+};
+
+const compareOrientationCandidates = (
+  candidateA: OrientationCandidateResult,
+  candidateB: OrientationCandidateResult,
+) => {
+  const resultA = candidateA.packingResult;
+  const resultB = candidateB.packingResult;
+
+  return (
+    resultA.payloadLimitedQuantity - resultB.payloadLimitedQuantity ||
+    resultA.totalQuantity - resultB.totalQuantity ||
+    resultA.volumeUtilizationPercent - resultB.volumeUtilizationPercent ||
+    candidateB.unusedVolumeMm3 - candidateA.unusedVolumeMm3
+  );
+};
+
+export const findBestOrientation = (
+  container: ContainerSpec,
+  object: PackingObject,
+  spacingMm = 0,
+): OrientationOptimizationResult | null => {
+  const internalVolumeMm3 = getInternalVolume(container);
+  const candidates = getOrientationCandidates(object).map((rotation) => {
+    const candidateObject = { ...object, rotation };
+    const packingResult = calculateGridPacking(container, candidateObject, spacingMm);
+    const bounds = getRotatedBoundingBox(candidateObject);
+    const occupiedVolumeMm3 = bounds.width * bounds.depth * bounds.height * packingResult.totalQuantity;
+
+    return {
+      rotation,
+      packingResult,
+      unusedVolumeMm3: Math.max(0, internalVolumeMm3 - occupiedVolumeMm3),
+    };
+  });
+
+  const bestCandidate = candidates.reduce<OrientationCandidateResult | null>((best, candidate) => {
+    if (!best || compareOrientationCandidates(candidate, best) > 0) {
+      return candidate;
+    }
+
+    return best;
+  }, null);
+
+  if (!bestCandidate) {
+    return null;
+  }
+
+  return {
+    ...bestCandidate,
+    testedCount: candidates.length,
+    reason:
+      'Selected by highest payload-limited quantity, then geometrical capacity, volume utilization, and lowest unused internal volume.',
   };
 };
