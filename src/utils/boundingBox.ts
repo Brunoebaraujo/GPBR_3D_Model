@@ -1,77 +1,89 @@
 import type { DimensionsMm, PackingObject, RotationDeg } from '../types';
 import { degreesToRadians } from './unitConversion';
 
-export interface RotatedBoundingBox extends DimensionsMm {
-  effectiveWidth: number;
-  effectiveDepth: number;
-  effectiveHeight: number;
-}
+const normalizeSmallValue = (value: number): number => (Math.abs(value) < 1e-9 ? 0 : value);
 
-const withEffectiveAliases = (dimensions: DimensionsMm): RotatedBoundingBox => ({
-  ...dimensions,
-  effectiveWidth: dimensions.width,
-  effectiveDepth: dimensions.depth,
-  effectiveHeight: dimensions.height,
-});
+const getTemplateDimensions = (object: PackingObject): DimensionsMm => {
+  if (object.type !== 'cylinder') {
+    return object.dimensions;
+  }
 
-const getBoxRotatedDimensions = (
-  dimensions: DimensionsMm,
-  rotation: RotationDeg,
-): RotatedBoundingBox => {
-  const x = degreesToRadians(rotation.x);
-  const y = degreesToRadians(rotation.y);
-  const z = degreesToRadians(rotation.z);
+  const diameter = object.dimensions.width;
 
-  const a = Math.cos(x);
-  const b = Math.sin(x);
-  const c = Math.cos(y);
-  const d = Math.sin(y);
-  const e = Math.cos(z);
-  const f = Math.sin(z);
-
-  const matrix = [
-    [c * e, -c * f, d],
-    [a * f + b * d * e, a * e - b * d * f, -b * c],
-    [b * f - a * d * e, b * e + a * d * f, a * c],
-  ];
-
-  const { width, depth, height } = dimensions;
-
-  // Packing uses width/depth/height as its occupied axes, so Z rotation is
-  // treated as a turn in the floor footprint.
-  return withEffectiveAliases({
-    width:
-      Math.abs(matrix[0][0]) * width +
-      Math.abs(matrix[0][1]) * depth +
-      Math.abs(matrix[0][2]) * height,
-    depth:
-      Math.abs(matrix[1][0]) * width +
-      Math.abs(matrix[1][1]) * depth +
-      Math.abs(matrix[1][2]) * height,
-    height:
-      Math.abs(matrix[2][0]) * width +
-      Math.abs(matrix[2][1]) * depth +
-      Math.abs(matrix[2][2]) * height,
-  });
+  return {
+    width: diameter,
+    depth: diameter,
+    height: object.dimensions.height,
+  };
 };
 
-const getCylinderRotatedDimensions = (
-  dimensions: DimensionsMm,
+const rotateCorner = (
+  corner: { x: number; y: number; z: number },
   rotation: RotationDeg,
-): RotatedBoundingBox => {
-  const diameter = dimensions.width;
+) => {
+  const rotationX = degreesToRadians(rotation.x);
+  const rotationY = degreesToRadians(rotation.y);
+  const rotationZ = degreesToRadians(rotation.z);
 
-  return getBoxRotatedDimensions(
-    {
-      width: diameter,
-      depth: diameter,
-      height: dimensions.height,
-    },
-    rotation,
+  const cosX = Math.cos(rotationX);
+  const sinX = Math.sin(rotationX);
+  const cosY = Math.cos(rotationY);
+  const sinY = Math.sin(rotationY);
+  const cosZ = Math.cos(rotationZ);
+  const sinZ = Math.sin(rotationZ);
+
+  const afterX = {
+    x: corner.x,
+    y: corner.y * cosX - corner.z * sinX,
+    z: corner.y * sinX + corner.z * cosX,
+  };
+
+  const afterY = {
+    x: afterX.x * cosY + afterX.z * sinY,
+    y: afterX.y,
+    z: -afterX.x * sinY + afterX.z * cosY,
+  };
+
+  return {
+    x: afterY.x * cosZ - afterY.y * sinZ,
+    y: afterY.x * sinZ + afterY.y * cosZ,
+    z: afterY.z,
+  };
+};
+
+export const getRotatedBoundingBoxDimensions = (object: PackingObject): DimensionsMm => {
+  const { width, depth, height } = getTemplateDimensions(object);
+  const halfWidth = width / 2;
+  const halfDepth = depth / 2;
+  const halfHeight = height / 2;
+
+  const corners = [-1, 1].flatMap((xSign) =>
+    [-1, 1].flatMap((ySign) =>
+      [-1, 1].map((zSign) =>
+        rotateCorner(
+          {
+            x: xSign * halfWidth,
+            y: ySign * halfDepth,
+            z: zSign * halfHeight,
+          },
+          object.rotation,
+        ),
+      ),
+    ),
   );
+
+  const minX = Math.min(...corners.map((corner) => corner.x));
+  const maxX = Math.max(...corners.map((corner) => corner.x));
+  const minY = Math.min(...corners.map((corner) => corner.y));
+  const maxY = Math.max(...corners.map((corner) => corner.y));
+  const minZ = Math.min(...corners.map((corner) => corner.z));
+  const maxZ = Math.max(...corners.map((corner) => corner.z));
+
+  return {
+    width: normalizeSmallValue(maxX - minX),
+    depth: normalizeSmallValue(maxY - minY),
+    height: normalizeSmallValue(maxZ - minZ),
+  };
 };
 
-export const calculateRotatedBoundingBox = (object: PackingObject): RotatedBoundingBox =>
-  object.type === 'cylinder'
-    ? getCylinderRotatedDimensions(object.dimensions, object.rotation)
-    : getBoxRotatedDimensions(object.dimensions, object.rotation);
+export const calculateRotatedBoundingBox = getRotatedBoundingBoxDimensions;
