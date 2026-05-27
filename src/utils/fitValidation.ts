@@ -1,26 +1,26 @@
 import type { ContainerSpec, FitValidationResult, PackingObject } from '../types';
-import { getRotatedBoundingBoxDimensions } from './boundingBox';
+import { getRotatedBoundingBox } from './boundingBox';
 
 const getBoxVolume = (dimensions: PackingObject['dimensions']): number =>
   dimensions.width * dimensions.depth * dimensions.height;
 
 const getObjectVolume = (object: PackingObject): number => {
-  const bounds = getRotatedBoundingBoxDimensions(object);
+  const bounds = getRotatedBoundingBox(object);
 
   return getBoxVolume(bounds);
 };
 
 const getObjectBounds = (object: PackingObject) => {
-  const { width, depth, height } = getRotatedBoundingBoxDimensions(object);
+  const bounds = getRotatedBoundingBox(object);
   const { x, y, z } = object.position;
 
   return {
-    minX: x - width / 2,
-    maxX: x + width / 2,
-    minY: y - depth / 2,
-    maxY: y + depth / 2,
-    minZ: z - height / 2,
-    maxZ: z + height / 2,
+    minX: x + bounds.minX,
+    maxX: x + bounds.maxX,
+    minY: y + bounds.minY,
+    maxY: y + bounds.maxY,
+    minZ: z + bounds.minZ,
+    maxZ: z + bounds.maxZ,
   };
 };
 
