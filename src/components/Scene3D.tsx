@@ -5,7 +5,12 @@ import type { Mesh } from 'three';
 import type { PackingObject, TransformMode } from '../types';
 import { MB5Container } from './MB5Container';
 import { PackingObject as PackingObjectMesh } from './PackingObject';
-import { radiansToDegrees, threeUnitsToMm } from '../utils/unitConversion';
+import {
+  packingPositionToThree,
+  threePositionToPacking,
+  threeRotationToPackingDegrees,
+  threeUnitsToMm,
+} from '../utils/unitConversion';
 
 interface Scene3DProps {
   objects: PackingObject[];
@@ -47,17 +52,14 @@ function ControlledPackingObject({
       return;
     }
 
+    const [threeX, threeY, threeZ] = packingPositionToThree(object.position);
     const { x, y, z } = objectRef.current.position;
     if (
-      Math.abs(threeUnitsToMm(x) - object.position.x) > 0.5 ||
-      Math.abs(threeUnitsToMm(y) - object.position.y) > 0.5 ||
-      Math.abs(threeUnitsToMm(z) - object.position.z) > 0.5
+      Math.abs(threeUnitsToMm(x - threeX)) > 0.5 ||
+      Math.abs(threeUnitsToMm(y - threeY)) > 0.5 ||
+      Math.abs(threeUnitsToMm(z - threeZ)) > 0.5
     ) {
-      objectRef.current.position.set(
-        object.position.x / 1000,
-        object.position.y / 1000,
-        object.position.z / 1000,
-      );
+      objectRef.current.position.set(threeX, threeY, threeZ);
     }
   }, [object.position.x, object.position.y, object.position.z]);
 
@@ -80,21 +82,10 @@ function ControlledPackingObject({
       return;
     }
 
-    const position = objectRef.current.position;
-    const rotation = objectRef.current.rotation;
-
     onUpdateObject({
       ...object,
-      position: {
-        x: Math.round(threeUnitsToMm(position.x)),
-        y: Math.round(threeUnitsToMm(position.y)),
-        z: Math.round(threeUnitsToMm(position.z)),
-      },
-      rotation: {
-        x: Math.round(radiansToDegrees(rotation.x)),
-        y: Math.round(radiansToDegrees(rotation.y)),
-        z: Math.round(radiansToDegrees(rotation.z)),
-      },
+      position: threePositionToPacking(objectRef.current.position),
+      rotation: threeRotationToPackingDegrees(objectRef.current.rotation),
     });
   };
 
