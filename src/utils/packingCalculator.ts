@@ -106,6 +106,10 @@ export const calculateGridPacking = (
   const volumeUtilizationPercent =
     containerVolume > 0 ? ((objectVolume * totalQuantity) / containerVolume) * 100 : 0;
 
+  if (rejectedCount > 0) {
+    console.warn(`${rejectedCount} generated object(s) were skipped because their Box3 exceeded MB5 limits.`);
+  }
+
   const warnings = [
     exceedsPayload ? 'Payload limit exceeded.' : undefined,
     rejectedCount > 0 ? `${rejectedCount} generated object(s) were skipped because their Box3 exceeded MB5 limits.` : undefined,
@@ -122,6 +126,6 @@ export const calculateGridPacking = (
     exceedsPayload,
     volumeUtilizationPercent,
     positions,
-    warning: warnings.join(' '),
+    warning: warnings.length > 0 ? warnings.join(' ') : undefined,
   };
 };
