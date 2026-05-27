@@ -38,6 +38,24 @@ export function Sidebar({ onAddObject }: SidebarProps) {
         </div>
       </dl>
 
+      <div className="section orientation-legend">
+        <h2>Orientation</h2>
+        <div className="legend-items" aria-label="Object face color legend">
+          <span>
+            <i className="legend-swatch top" />
+            Green = Top
+          </span>
+          <span>
+            <i className="legend-swatch bottom" />
+            Orange = Bottom
+          </span>
+          <span>
+            <i className="legend-swatch body" />
+            Blue = Side/body
+          </span>
+        </div>
+      </div>
+
       <div className="section">
         <h2>Add object</h2>
         <div className="button-stack">
