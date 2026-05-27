@@ -1,27 +1,13 @@
 import type { ContainerSpec, FitValidationResult, PackingObject } from '../types';
-import { getRotatedBoundingBox } from './boundingBox';
+import { getPackingObjectBounds } from './boundingBox';
 
 const getBoxVolume = (dimensions: PackingObject['dimensions']): number =>
   dimensions.width * dimensions.depth * dimensions.height;
 
 const getObjectVolume = (object: PackingObject): number => {
-  const bounds = getRotatedBoundingBox(object);
+  const bounds = getPackingObjectBounds(object);
 
-  return getBoxVolume(bounds);
-};
-
-const getObjectBounds = (object: PackingObject) => {
-  const bounds = getRotatedBoundingBox(object);
-  const { x, y, z } = object.position;
-
-  return {
-    minX: x + bounds.minX,
-    maxX: x + bounds.maxX,
-    minY: y + bounds.minY,
-    maxY: y + bounds.maxY,
-    minZ: z + bounds.minZ,
-    maxZ: z + bounds.maxZ,
-  };
+  return bounds.width * bounds.depth * bounds.height;
 };
 
 const getContainerBounds = (container: ContainerSpec) => {
@@ -50,12 +36,12 @@ export const validateFit = (
 
   const objectResults = objects.map((object) => {
     const warnings: string[] = [];
-    const bounds = getObjectBounds(object);
+    const bounds = getPackingObjectBounds(object);
 
     if (
-      bounds.maxX - bounds.minX > container.internalDimensions.width ||
-      bounds.maxY - bounds.minY > container.internalDimensions.depth ||
-      bounds.maxZ - bounds.minZ > container.internalDimensions.height
+      bounds.width > container.internalDimensions.width ||
+      bounds.depth > container.internalDimensions.depth ||
+      bounds.height > container.internalDimensions.height
     ) {
       warnings.push(`${object.name} dimensions exceed MB5 usable dimensions.`);
     }
