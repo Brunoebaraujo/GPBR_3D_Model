@@ -11,7 +11,17 @@ export interface RotatedBoundingBox extends DimensionsMm {
   offset: Vector3Mm;
 }
 
-const normalizeSmallValue = (value: number): number => (Math.abs(value) < 1e-9 ? 0 : value);
+const EPSILON = 1e-9;
+
+const normalizeSmallValue = (value: number): number => {
+  if (Math.abs(value) < EPSILON) {
+    return 0;
+  }
+
+  const nearestInteger = Math.round(value);
+
+  return Math.abs(value - nearestInteger) < EPSILON ? nearestInteger : value;
+};
 
 const getTemplateDimensions = (object: PackingObject): DimensionsMm => {
   if (object.type !== 'cylinder') {
