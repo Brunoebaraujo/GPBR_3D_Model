@@ -3,7 +3,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { forwardRef } from 'react';
 import type { Mesh } from 'three';
 import type { PackingObject as PackingObjectType } from '../types';
-import { mmToThreeUnits, rotationDegreesToRadians } from '../utils/unitConversion';
+import { mmToThreeUnits, packingPositionToThree, rotationDegreesToRadians } from '../utils/unitConversion';
 
 interface PackingObjectProps {
   object: PackingObjectType;
@@ -25,11 +25,7 @@ export const PackingObject = forwardRef<Mesh, PackingObjectProps>(function Packi
   return (
     <mesh
       ref={ref}
-      position={[
-        mmToThreeUnits(object.position.x),
-        mmToThreeUnits(object.position.y),
-        mmToThreeUnits(object.position.z),
-      ]}
+      position={packingPositionToThree(object.position)}
       rotation={rotationDegreesToRadians(object.rotation)}
       onClick={handleClick}
       castShadow
