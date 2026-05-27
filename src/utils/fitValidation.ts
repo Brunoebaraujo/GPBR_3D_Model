@@ -1,18 +1,17 @@
 import type { ContainerSpec, FitValidationResult, PackingObject } from '../types';
+import { calculateRotatedBoundingBox } from './boundingBox';
 
 const getBoxVolume = (dimensions: PackingObject['dimensions']): number =>
   dimensions.width * dimensions.depth * dimensions.height;
 
 const getObjectVolume = (object: PackingObject): number => {
-  if (object.type === 'cylinder') {
-    return Math.PI * (object.dimensions.width / 2) ** 2 * object.dimensions.height;
-  }
+  const bounds = calculateRotatedBoundingBox(object);
 
-  return getBoxVolume(object.dimensions);
+  return getBoxVolume(bounds);
 };
 
 const getObjectBounds = (object: PackingObject) => {
-  const { width, depth, height } = object.dimensions;
+  const { width, depth, height } = calculateRotatedBoundingBox(object);
   const { x, y, z } = object.position;
 
   return {
@@ -54,9 +53,9 @@ export const validateFit = (
     const bounds = getObjectBounds(object);
 
     if (
-      object.dimensions.width > container.internalDimensions.width ||
-      object.dimensions.depth > container.internalDimensions.depth ||
-      object.dimensions.height > container.internalDimensions.height
+      bounds.maxX - bounds.minX > container.internalDimensions.width ||
+      bounds.maxZ - bounds.minZ > container.internalDimensions.depth ||
+      bounds.maxY - bounds.minY > container.internalDimensions.height
     ) {
       warnings.push(`${object.name} dimensions exceed MB5 usable dimensions.`);
     }
