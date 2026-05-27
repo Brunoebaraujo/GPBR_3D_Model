@@ -1,8 +1,8 @@
 import type { ContainerSpec, GridPackingResult, PackingObject, Vector3Mm } from '../types';
-import { calculateRotatedBoundingBox } from './boundingBox';
+import { getRotatedBoundingBoxDimensions } from './boundingBox';
 
 const getObjectVolume = (object: PackingObject): number => {
-  const { width, depth, height } = calculateRotatedBoundingBox(object);
+  const { width, depth, height } = getRotatedBoundingBoxDimensions(object);
 
   return width * depth * height;
 };
@@ -15,10 +15,10 @@ export const calculateGridPacking = (
   const spacing = Math.max(0, spacingMm);
   const { width: internalWidth, depth: internalDepth, height: internalHeight } = container.internalDimensions;
   const {
-    width: objectWidth,
-    depth: objectDepth,
-    height: objectHeight,
-  } = calculateRotatedBoundingBox(object);
+    width: effectiveWidth,
+    depth: effectiveDepth,
+    height: effectiveHeight,
+  } = getRotatedBoundingBoxDimensions(object);
 
   const emptyResult = (warning?: string): GridPackingResult => ({
     countX: 0,
@@ -35,22 +35,23 @@ export const calculateGridPacking = (
   });
 
   if (
-    objectWidth <= 0 ||
-    objectDepth <= 0 ||
-    objectHeight <= 0 ||
-    objectWidth > internalWidth ||
-    objectDepth > internalDepth ||
-    objectHeight > internalHeight
+    effectiveWidth <= 0 ||
+    effectiveDepth <= 0 ||
+    effectiveHeight <= 0 ||
+    effectiveWidth > internalWidth ||
+    effectiveDepth > internalDepth ||
+    effectiveHeight > internalHeight
   ) {
     return emptyResult('Object does not fit inside MB5.');
   }
 
-  const countAlongAxis = (available: number, item: number) =>
-    Math.floor((available + spacing) / (item + spacing));
+  const stepX = effectiveWidth + spacing;
+  const stepY = effectiveDepth + spacing;
+  const stepZ = effectiveHeight + spacing;
 
-  const countX = countAlongAxis(internalWidth, objectWidth);
-  const countY = countAlongAxis(internalDepth, objectDepth);
-  const countZ = countAlongAxis(internalHeight, objectHeight);
+  const countX = Math.floor((internalWidth + spacing) / stepX);
+  const countY = Math.floor((internalDepth + spacing) / stepY);
+  const countZ = Math.floor((internalHeight + spacing) / stepZ);
   const totalQuantity = countX * countY * countZ;
   const totalWeight = totalQuantity * object.weightKg;
   const remainingPayload = container.maxPayloadKg - totalWeight;
@@ -61,17 +62,22 @@ export const calculateGridPacking = (
   const volumeUtilizationPercent =
     containerVolume > 0 ? ((getObjectVolume(object) * totalQuantity) / containerVolume) * 100 : 0;
 
-  const positions: Vector3Mm[] = [];
-  const startX = -internalWidth / 2 + objectWidth / 2;
-  const startZ = -internalDepth / 2 + objectDepth / 2;
+  const xMin = -internalWidth / 2;
+  const yMin = -internalDepth / 2;
+  const zMin = 0;
+  const firstCenterX = xMin + effectiveWidth / 2;
+  const firstCenterY = yMin + effectiveDepth / 2;
+  const firstCenterZ = zMin + effectiveHeight / 2;
 
-  for (let heightIndex = 0; heightIndex < countZ; heightIndex += 1) {
-    for (let depthIndex = 0; depthIndex < countY; depthIndex += 1) {
-      for (let xIndex = 0; xIndex < countX; xIndex += 1) {
+  const positions: Vector3Mm[] = [];
+
+  for (let iz = 0; iz < countZ; iz += 1) {
+    for (let iy = 0; iy < countY; iy += 1) {
+      for (let ix = 0; ix < countX; ix += 1) {
         positions.push({
-          x: startX + xIndex * (objectWidth + spacing),
-          y: objectHeight / 2 + heightIndex * (objectHeight + spacing),
-          z: startZ + depthIndex * (objectDepth + spacing),
+          x: firstCenterX + ix * stepX,
+          y: firstCenterY + iy * stepY,
+          z: firstCenterZ + iz * stepZ,
         });
       }
     }
