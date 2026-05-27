@@ -1,11 +1,10 @@
 import type { ContainerSpec, GridPackingResult, PackingObject, Vector3Mm } from '../types';
+import { calculateRotatedBoundingBox } from './boundingBox';
 
 const getObjectVolume = (object: PackingObject): number => {
-  if (object.type === 'cylinder') {
-    return Math.PI * (object.dimensions.width / 2) ** 2 * object.dimensions.height;
-  }
+  const { width, depth, height } = calculateRotatedBoundingBox(object);
 
-  return object.dimensions.width * object.dimensions.depth * object.dimensions.height;
+  return width * depth * height;
 };
 
 export const calculateGridPacking = (
@@ -15,7 +14,11 @@ export const calculateGridPacking = (
 ): GridPackingResult => {
   const spacing = Math.max(0, spacingMm);
   const { width: internalWidth, depth: internalDepth, height: internalHeight } = container.internalDimensions;
-  const { width: objectWidth, depth: objectDepth, height: objectHeight } = object.dimensions;
+  const {
+    width: objectWidth,
+    depth: objectDepth,
+    height: objectHeight,
+  } = calculateRotatedBoundingBox(object);
 
   const emptyResult = (warning?: string): GridPackingResult => ({
     countX: 0,
