@@ -72,3 +72,14 @@ export interface GridPackingResult {
   positions: Vector3Mm[];
   warning?: string;
 }
+
+export interface OrientationCandidateResult {
+  rotation: RotationDeg;
+  packingResult: GridPackingResult;
+  unusedVolumeMm3: number;
+}
+
+export interface OrientationOptimizationResult extends OrientationCandidateResult {
+  testedCount: number;
+  reason: string;
+}
