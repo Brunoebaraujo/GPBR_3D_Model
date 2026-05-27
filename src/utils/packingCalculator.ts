@@ -1,8 +1,8 @@
 import type { ContainerSpec, GridPackingResult, PackingObject, Vector3Mm } from '../types';
-import { getRotatedBoundingBoxDimensions } from './boundingBox';
+import { getRotatedBoundingBox } from './boundingBox';
 
 const getObjectVolume = (object: PackingObject): number => {
-  const { width, depth, height } = getRotatedBoundingBoxDimensions(object);
+  const { width, depth, height } = getRotatedBoundingBox(object);
 
   return width * depth * height;
 };
@@ -18,7 +18,8 @@ export const calculateGridPacking = (
     width: effectiveWidth,
     depth: effectiveDepth,
     height: effectiveHeight,
-  } = getRotatedBoundingBoxDimensions(object);
+    offset,
+  } = getRotatedBoundingBox(object);
 
   const emptyResult = (warning?: string): GridPackingResult => ({
     countX: 0,
@@ -34,10 +35,11 @@ export const calculateGridPacking = (
     warning,
   });
 
+  if (effectiveWidth <= 0 || effectiveDepth <= 0 || effectiveHeight <= 0) {
+    return emptyResult('Object has invalid transformed dimensions.');
+  }
+
   if (
-    effectiveWidth <= 0 ||
-    effectiveDepth <= 0 ||
-    effectiveHeight <= 0 ||
     effectiveWidth > internalWidth ||
     effectiveDepth > internalDepth ||
     effectiveHeight > internalHeight
@@ -65,19 +67,20 @@ export const calculateGridPacking = (
   const xMin = -internalWidth / 2;
   const yMin = -internalDepth / 2;
   const zMin = 0;
-  const firstCenterX = xMin + effectiveWidth / 2;
-  const firstCenterY = yMin + effectiveDepth / 2;
-  const firstCenterZ = zMin + effectiveHeight / 2;
 
   const positions: Vector3Mm[] = [];
 
   for (let iz = 0; iz < countZ; iz += 1) {
     for (let iy = 0; iy < countY; iy += 1) {
       for (let ix = 0; ix < countX; ix += 1) {
+        const bboxCenterX = xMin + effectiveWidth / 2 + ix * stepX;
+        const bboxCenterY = yMin + effectiveDepth / 2 + iy * stepY;
+        const bboxCenterZ = zMin + effectiveHeight / 2 + iz * stepZ;
+
         positions.push({
-          x: firstCenterX + ix * stepX,
-          y: firstCenterY + iy * stepY,
-          z: firstCenterZ + iz * stepZ,
+          x: bboxCenterX + offset.x,
+          y: bboxCenterY + offset.y,
+          z: bboxCenterZ + offset.z,
         });
       }
     }
