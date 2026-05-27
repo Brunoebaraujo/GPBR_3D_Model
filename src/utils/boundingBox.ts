@@ -1,5 +1,6 @@
-import type { DimensionsMm, PackingObject, RotationDeg, Vector3Mm } from '../types';
-import { degreesToRadians } from './unitConversion';
+import { Box3, Vector3 } from 'three';
+import type { DimensionsMm, PackingObject, Vector3Mm } from '../types';
+import { createPackingMesh } from './createPackingMesh';
 
 export interface RotatedBoundingBox extends DimensionsMm {
   minX: number;
@@ -8,12 +9,11 @@ export interface RotatedBoundingBox extends DimensionsMm {
   maxY: number;
   minZ: number;
   maxZ: number;
-  offset: Vector3Mm;
 }
 
-const EPSILON = 1e-9;
+const EPSILON = 1e-7;
 
-const normalizeSmallValue = (value: number): number => {
+const normalizeValue = (value: number): number => {
   if (Math.abs(value) < EPSILON) {
     return 0;
   }
@@ -23,98 +23,38 @@ const normalizeSmallValue = (value: number): number => {
   return Math.abs(value - nearestInteger) < EPSILON ? nearestInteger : value;
 };
 
-const getTemplateDimensions = (object: PackingObject): DimensionsMm => {
-  if (object.type !== 'cylinder') {
-    return object.dimensions;
-  }
+const normalizeVector = (vector: Vector3Mm): Vector3Mm => ({
+  x: normalizeValue(vector.x),
+  y: normalizeValue(vector.y),
+  z: normalizeValue(vector.z),
+});
 
-  const diameter = object.dimensions.width;
-
-  return {
-    width: diameter,
-    depth: diameter,
-    height: object.dimensions.height,
-  };
+const disposeMesh = (mesh: ReturnType<typeof createPackingMesh>) => {
+  mesh.geometry.dispose();
 };
 
-const rotateCorner = (corner: Vector3Mm, rotation: RotationDeg): Vector3Mm => {
-  const rotationX = degreesToRadians(rotation.x);
-  const rotationY = degreesToRadians(rotation.y);
-  const rotationZ = degreesToRadians(rotation.z);
+export const getPackingObjectBox = (object: PackingObject, position?: Vector3Mm): Box3 => {
+  const mesh = createPackingMesh(object, position);
+  const box = new Box3().setFromObject(mesh);
+  disposeMesh(mesh);
 
-  const cosX = Math.cos(rotationX);
-  const sinX = Math.sin(rotationX);
-  const cosY = Math.cos(rotationY);
-  const sinY = Math.sin(rotationY);
-  const cosZ = Math.cos(rotationZ);
-  const sinZ = Math.sin(rotationZ);
-
-  const afterX = {
-    x: corner.x,
-    y: corner.y * cosX - corner.z * sinX,
-    z: corner.y * sinX + corner.z * cosX,
-  };
-
-  const afterY = {
-    x: afterX.x * cosY + afterX.z * sinY,
-    y: afterX.y,
-    z: -afterX.x * sinY + afterX.z * cosY,
-  };
-
-  return {
-    x: afterY.x * cosZ - afterY.y * sinZ,
-    y: afterY.x * sinZ + afterY.y * cosZ,
-    z: afterY.z,
-  };
+  return box;
 };
 
 export const getRotatedBoundingBox = (object: PackingObject): RotatedBoundingBox => {
-  const { width, depth, height } = getTemplateDimensions(object);
-  const halfWidth = width / 2;
-  const halfDepth = depth / 2;
-  const halfHeight = height / 2;
-
-  const corners = [-1, 1].flatMap((xSign) =>
-    [-1, 1].flatMap((ySign) =>
-      [-1, 1].map((zSign) =>
-        rotateCorner(
-          {
-            x: xSign * halfWidth,
-            y: ySign * halfDepth,
-            z: zSign * halfHeight,
-          },
-          object.rotation,
-        ),
-      ),
-    ),
-  );
-
-  const minX = normalizeSmallValue(Math.min(...corners.map((corner) => corner.x)));
-  const maxX = normalizeSmallValue(Math.max(...corners.map((corner) => corner.x)));
-  const minY = normalizeSmallValue(Math.min(...corners.map((corner) => corner.y)));
-  const maxY = normalizeSmallValue(Math.max(...corners.map((corner) => corner.y)));
-  const minZ = normalizeSmallValue(Math.min(...corners.map((corner) => corner.z)));
-  const maxZ = normalizeSmallValue(Math.max(...corners.map((corner) => corner.z)));
-
-  const effectiveWidth = normalizeSmallValue(maxX - minX);
-  const effectiveDepth = normalizeSmallValue(maxY - minY);
-  const effectiveHeight = normalizeSmallValue(maxZ - minZ);
+  const box = getPackingObjectBox(object, { x: 0, y: 0, z: 0 });
+  const size = normalizeVector(box.getSize(new Vector3()));
 
   return {
-    width: effectiveWidth,
-    depth: effectiveDepth,
-    height: effectiveHeight,
-    minX,
-    maxX,
-    minY,
-    maxY,
-    minZ,
-    maxZ,
-    offset: {
-      x: normalizeSmallValue(-minX - effectiveWidth / 2),
-      y: normalizeSmallValue(-minY - effectiveDepth / 2),
-      z: normalizeSmallValue(-minZ - effectiveHeight / 2),
-    },
+    width: size.x,
+    depth: size.y,
+    height: size.z,
+    minX: normalizeValue(box.min.x),
+    maxX: normalizeValue(box.max.x),
+    minY: normalizeValue(box.min.y),
+    maxY: normalizeValue(box.max.y),
+    minZ: normalizeValue(box.min.z),
+    maxZ: normalizeValue(box.max.z),
   };
 };
 
@@ -122,6 +62,23 @@ export const getRotatedBoundingBoxDimensions = (object: PackingObject): Dimensio
   const { width, depth, height } = getRotatedBoundingBox(object);
 
   return { width, depth, height };
+};
+
+export const getPackingObjectBounds = (object: PackingObject, position = object.position): RotatedBoundingBox => {
+  const box = getPackingObjectBox(object, position);
+  const size = normalizeVector(box.getSize(new Vector3()));
+
+  return {
+    width: size.x,
+    depth: size.y,
+    height: size.z,
+    minX: normalizeValue(box.min.x),
+    maxX: normalizeValue(box.max.x),
+    minY: normalizeValue(box.min.y),
+    maxY: normalizeValue(box.max.y),
+    minZ: normalizeValue(box.min.z),
+    maxZ: normalizeValue(box.max.z),
+  };
 };
 
 export const calculateRotatedBoundingBox = getRotatedBoundingBox;
