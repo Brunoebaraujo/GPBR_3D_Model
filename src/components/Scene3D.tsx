@@ -23,6 +23,7 @@ export function Scene3D({
   onUpdateObject,
 }: Scene3DProps) {
   const objectRefs = useRef<Record<string, Group | null>>({});
+  const objectRefCallbacks = useRef<Record<string, (group: Group | null) => void>>({});
   const transformControlsRef = useRef<any>(null);
   const selectedObjectRef = useRef<PackingObject | null>(null);
   const [isTransformDragging, setIsTransformDragging] = useState(false);
@@ -70,13 +71,20 @@ export function Scene3D({
     };
   }, [commitSelectedTransform, selectedGroup]);
 
-  const setObjectRef = useCallback(
-    (id: string) => (group: Group | null) => {
-      objectRefs.current[id] = group;
-      setRefsVersion((version) => version + 1);
-    },
-    [],
-  );
+  const getObjectRef = useCallback((id: string) => {
+    if (!objectRefCallbacks.current[id]) {
+      objectRefCallbacks.current[id] = (group: Group | null) => {
+        if (objectRefs.current[id] === group) {
+          return;
+        }
+
+        objectRefs.current[id] = group;
+        setRefsVersion((version) => version + 1);
+      };
+    }
+
+    return objectRefCallbacks.current[id];
+  }, []);
 
   return (
     <div className="scene-shell">
@@ -89,7 +97,7 @@ export function Scene3D({
         {objects.map((object) => (
           <PackingObjectMesh
             key={object.id}
-            ref={setObjectRef(object.id)}
+            ref={getObjectRef(object.id)}
             object={object}
             isSelected={object.id === selectedObjectId}
             onSelect={onSelectObject}
