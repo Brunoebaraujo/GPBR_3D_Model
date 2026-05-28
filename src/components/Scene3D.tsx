@@ -1,16 +1,11 @@
 import { Canvas } from '@react-three/fiber';
 import { Grid, OrbitControls, PerspectiveCamera, TransformControls } from '@react-three/drei';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Mesh } from 'three';
+import type { Group } from 'three';
 import type { PackingObject, TransformMode } from '../types';
 import { MB5Container } from './MB5Container';
 import { PackingObject as PackingObjectMesh } from './PackingObject';
-import {
-  packingPositionToThree,
-  threePositionToPacking,
-  threeRotationToPackingDegrees,
-  threeUnitsToMm,
-} from '../utils/unitConversion';
+import { threePositionToPacking, threeRotationToPackingDegrees } from '../utils/unitConversion';
 
 interface Scene3DProps {
   objects: PackingObject[];
@@ -20,48 +15,38 @@ interface Scene3DProps {
   onUpdateObject: (object: PackingObject) => void;
 }
 
-interface ControlledPackingObjectProps {
-  object: PackingObject;
-  isSelected: boolean;
-  transformMode: TransformMode;
-  onSelectObject: (id: string) => void;
-  onUpdateObject: (object: PackingObject) => void;
-  onDraggingChange: (isDragging: boolean) => void;
-}
-
-function ControlledPackingObject({
-  object,
-  isSelected,
+export function Scene3D({
+  objects,
+  selectedObjectId,
   transformMode,
   onSelectObject,
   onUpdateObject,
-  onDraggingChange,
-}: ControlledPackingObjectProps) {
-  const objectRef = useRef<Mesh>(null);
+}: Scene3DProps) {
+  const objectRefs = useRef<Record<string, Group | null>>({});
   const transformControlsRef = useRef<any>(null);
+  const selectedObjectRef = useRef<PackingObject | null>(null);
+  const [isTransformDragging, setIsTransformDragging] = useState(false);
+  const [refsVersion, setRefsVersion] = useState(0);
 
-  const handleDraggingChanged = useCallback(
-    (event: { value: boolean }) => {
-      onDraggingChange(event.value);
-    },
-    [onDraggingChange],
-  );
+  const selectedObject = objects.find((object) => object.id === selectedObjectId) ?? null;
+  const selectedGroup = selectedObjectId ? objectRefs.current[selectedObjectId] ?? null : null;
+  selectedObjectRef.current = selectedObject;
 
-  useEffect(() => {
-    if (!objectRef.current) {
+  const commitSelectedTransform = useCallback(() => {
+    const object = selectedObjectRef.current;
+    const group = object ? objectRefs.current[object.id] : null;
+
+    if (!object || !group) {
       return;
     }
 
-    const [threeX, threeY, threeZ] = packingPositionToThree(object.position);
-    const { x, y, z } = objectRef.current.position;
-    if (
-      Math.abs(threeUnitsToMm(x - threeX)) > 0.5 ||
-      Math.abs(threeUnitsToMm(y - threeY)) > 0.5 ||
-      Math.abs(threeUnitsToMm(z - threeZ)) > 0.5
-    ) {
-      objectRef.current.position.set(threeX, threeY, threeZ);
-    }
-  }, [object.position.x, object.position.y, object.position.z]);
+    group.updateMatrixWorld(true);
+    onUpdateObject({
+      ...object,
+      position: threePositionToPacking(group.position),
+      rotation: threeRotationToPackingDegrees(group.rotation),
+    });
+  }, [onUpdateObject]);
 
   useEffect(() => {
     const controls = transformControlsRef.current;
@@ -70,53 +55,28 @@ function ControlledPackingObject({
       return;
     }
 
+    const handleDraggingChanged = (event: { value: boolean }) => {
+      if (!event.value) {
+        commitSelectedTransform();
+      }
+
+      setIsTransformDragging(event.value);
+    };
+
     controls.addEventListener('dragging-changed', handleDraggingChanged);
 
     return () => {
       controls.removeEventListener('dragging-changed', handleDraggingChanged);
     };
-  }, [handleDraggingChanged]);
+  }, [commitSelectedTransform, selectedGroup]);
 
-  const syncTransform = () => {
-    if (!objectRef.current) {
-      return;
-    }
-
-    onUpdateObject({
-      ...object,
-      position: threePositionToPacking(objectRef.current.position),
-      rotation: threeRotationToPackingDegrees(objectRef.current.rotation),
-    });
-  };
-
-  const objectElement = (
-    <PackingObjectMesh
-      ref={objectRef}
-      object={object}
-      isSelected={isSelected}
-      onSelect={onSelectObject}
-    />
+  const setObjectRef = useCallback(
+    (id: string) => (group: Group | null) => {
+      objectRefs.current[id] = group;
+      setRefsVersion((version) => version + 1);
+    },
+    [],
   );
-
-  if (!isSelected) {
-    return objectElement;
-  }
-
-  return (
-    <TransformControls ref={transformControlsRef} mode={transformMode} onObjectChange={syncTransform}>
-      {objectElement}
-    </TransformControls>
-  );
-}
-
-export function Scene3D({
-  objects,
-  selectedObjectId,
-  transformMode,
-  onSelectObject,
-  onUpdateObject,
-}: Scene3DProps) {
-  const [isTransformDragging, setIsTransformDragging] = useState(false);
 
   return (
     <div className="scene-shell">
@@ -127,16 +87,22 @@ export function Scene3D({
         <directionalLight position={[3, 5, 4]} intensity={1.3} castShadow />
         <MB5Container />
         {objects.map((object) => (
-          <ControlledPackingObject
+          <PackingObjectMesh
             key={object.id}
+            ref={setObjectRef(object.id)}
             object={object}
             isSelected={object.id === selectedObjectId}
-            transformMode={transformMode}
-            onSelectObject={onSelectObject}
-            onUpdateObject={onUpdateObject}
-            onDraggingChange={setIsTransformDragging}
+            onSelect={onSelectObject}
           />
         ))}
+        {selectedGroup ? (
+          <TransformControls
+            key={`${selectedObjectId ?? 'none'}-${refsVersion}`}
+            ref={transformControlsRef}
+            object={selectedGroup}
+            mode={transformMode}
+          />
+        ) : null}
         <Grid
           args={[5, 5]}
           cellSize={0.25}
