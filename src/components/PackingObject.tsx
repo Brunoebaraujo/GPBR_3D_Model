@@ -1,6 +1,6 @@
 import { Edges } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
-import { forwardRef, useLayoutEffect, useRef } from 'react';
+import { forwardRef, useCallback, useLayoutEffect, useRef } from 'react';
 import type { Group } from 'three';
 import type { PackingObject as PackingObjectType } from '../types';
 import { mmToThreeUnits, packingPositionToThree, rotationDegreesToRadians } from '../utils/unitConversion';
@@ -25,15 +25,18 @@ export const PackingObject = forwardRef<Group, PackingObjectProps>(function Pack
   const { width, depth, height } = object.dimensions;
   const opacity = isSelected ? 0.92 : 0.78;
 
-  const setGroupRef = (group: Group | null) => {
-    groupRef.current = group;
+  const setGroupRef = useCallback(
+    (group: Group | null) => {
+      groupRef.current = group;
 
-    if (typeof forwardedRef === 'function') {
-      forwardedRef(group);
-    } else if (forwardedRef) {
-      forwardedRef.current = group;
-    }
-  };
+      if (typeof forwardedRef === 'function') {
+        forwardedRef(group);
+      } else if (forwardedRef) {
+        forwardedRef.current = group;
+      }
+    },
+    [forwardedRef],
+  );
 
   useLayoutEffect(() => {
     const group = groupRef.current;
