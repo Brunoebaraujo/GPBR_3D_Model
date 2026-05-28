@@ -27,7 +27,7 @@ export function Scene3D({
   const transformControlsRef = useRef<any>(null);
   const selectedObjectRef = useRef<PackingObject | null>(null);
   const [isTransformDragging, setIsTransformDragging] = useState(false);
-  const [refsVersion, setRefsVersion] = useState(0);
+  const [, setRefsVersion] = useState(0);
 
   const selectedObject = objects.find((object) => object.id === selectedObjectId) ?? null;
   const selectedGroup = selectedObjectId ? objectRefs.current[selectedObjectId] ?? null : null;
@@ -105,7 +105,7 @@ export function Scene3D({
         ))}
         {selectedGroup ? (
           <TransformControls
-            key={`${selectedObjectId ?? 'none'}-${refsVersion}`}
+            key={selectedObjectId ?? 'selected-object'}
             ref={transformControlsRef}
             object={selectedGroup}
             mode={transformMode}
