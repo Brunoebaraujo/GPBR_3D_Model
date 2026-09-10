@@ -2,6 +2,8 @@ export type PackingObjectType = 'block' | 'cube' | 'cylinder';
 
 export type TopFace = '+x' | '-x' | '+y' | '-y' | '+z' | '-z';
 
+export type NestingMode = 'uniform' | 'mixed';
+
 export type TransformMode = 'translate' | 'rotate';
 
 export interface DimensionsMm {
@@ -63,7 +65,26 @@ export interface FitValidationResult {
   objectResults: ObjectValidationResult[];
 }
 
+export interface PackingPlacement {
+  position: Vector3Mm;
+  rotation: RotationDeg;
+  isSecondary: boolean;
+}
+
+export interface PackingOrientationSummary {
+  rotation: RotationDeg;
+  quantity: number;
+  geometricalQuantity: number;
+  isSecondary: boolean;
+}
+
 export interface GridPackingResult {
+  placements?: PackingPlacement[];
+  orientationBreakdown?: PackingOrientationSummary[];
+  uniformQuantity?: number;
+  uniformGeometricalQuantity?: number;
+  addedQuantity?: number;
+  mixedNote?: string;
   pattern?: string;
   previewTruncated?: boolean;
   countX: number;

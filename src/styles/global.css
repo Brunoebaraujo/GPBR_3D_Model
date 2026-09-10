@@ -442,3 +442,23 @@ select { font: inherit; color: #17212b; background: white; border: 1px solid #b8
   .editor-header button { font-size: .8rem; }
   .editor-tools { border-bottom: 1px solid #cbd6df; }
 }
+
+.nesting-modes { border: 0; padding: 0; margin: 0; display: grid; gap: .5rem; }
+.nesting-modes legend { font-size: .875rem; font-weight: 700; margin-bottom: .6rem; }
+.nesting-modes label { display: flex; align-items: flex-start; gap: .65rem; border: 1px solid #bdcbd8; background: white; border-radius: 7px; padding: .75rem; cursor: pointer; }
+.nesting-modes label.selected { border-color: #155da6; background: #eaf3fb; }
+.nesting-modes input { width: 17px; height: 17px; flex-shrink: 0; margin: .15rem 0; accent-color: #155da6; }
+.nesting-modes strong { display: block; font-size: .875rem; }
+.nesting-modes small { display: block; font-size: .8rem; color: #465d71; line-height: 1.45; margin-top: .25rem; }
+.nesting-guidance { display: grid; gap: .6rem; font-size: .875rem; line-height: 1.5; color: #41556b; }
+.nesting-comparison { display: grid; gap: .5rem; padding-block: .5rem; border-block: 1px solid #d5e1eb; }
+.nesting-comparison > div { display: flex; justify-content: space-between; gap: 1rem; font-size: .875rem; }
+.nesting-comparison > div:last-child strong { color: #11624d; }
+.orientation-table { overflow-x: auto; }
+.orientation-table table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.orientation-table caption { text-align: left; font-size: .875rem; font-weight: 700; padding-bottom: .55rem; }
+.orientation-table th, .orientation-table td { padding: .5rem .2rem; border-bottom: 1px solid #d5e1eb; text-align: right; }
+.orientation-table th:first-child { text-align: left; }
+.orientation-table small { display: block; margin-top: .25rem; color: #566d80; font-weight: 400; }
+.orientation-dot { display: inline-block; width: .65rem; height: .65rem; border-radius: 50%; background: #2f80ed; margin-right: .35rem; }
+.orientation-dot.secondary { background: #985bd8; }
