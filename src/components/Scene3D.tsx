@@ -1,14 +1,16 @@
 import { Canvas } from '@react-three/fiber';
-import { Grid, OrbitControls, PerspectiveCamera, TransformControls } from '@react-three/drei';
+import { Bounds, Grid, OrbitControls, PerspectiveCamera, TransformControls } from '@react-three/drei';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Group } from 'three';
-import type { PackingObject, TransformMode } from '../types';
+import type { PackingObject, TransformMode, TopFace } from '../types';
 import { MB5Container } from './MB5Container';
 import { PackingObject as PackingObjectMesh } from './PackingObject';
 import { threePositionToPacking, threeRotationToPackingDegrees } from '../utils/unitConversion';
 
 interface Scene3DProps {
   objects: PackingObject[];
+  studio?: boolean;
+  onPickTop?: (face: TopFace) => void;
   selectedObjectId: string | null;
   transformMode: TransformMode;
   onSelectObject: (id: string | null) => void;
@@ -17,6 +19,8 @@ interface Scene3DProps {
 
 export function Scene3D({
   objects,
+  studio = false,
+  onPickTop,
   selectedObjectId,
   transformMode,
   onSelectObject,
@@ -93,7 +97,8 @@ export function Scene3D({
         <color attach="background" args={['#eef2f5']} />
         <ambientLight intensity={0.75} />
         <directionalLight position={[3, 5, 4]} intensity={1.3} castShadow />
-        <MB5Container />
+        {!studio && <MB5Container />}
+        <Bounds fit={studio} clip={studio} observe={studio} margin={1.6}>
         {objects.map((object) => (
           <PackingObjectMesh
             key={object.id}
@@ -101,9 +106,11 @@ export function Scene3D({
             object={object}
             isSelected={object.id === selectedObjectId}
             onSelect={onSelectObject}
+            onPickTop={onPickTop}
           />
         ))}
-        {selectedGroup ? (
+        </Bounds>
+        {selectedGroup && !onPickTop ? (
           <TransformControls
             key={selectedObjectId ?? 'selected-object'}
             ref={transformControlsRef}

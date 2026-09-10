@@ -1,226 +1,89 @@
-import type {
-  ContainerSpec,
-  GridPackingResult,
-  OrientationCandidateResult,
-  OrientationOptimizationResult,
-  PackingObject,
-  RotationDeg,
-  Vector3Mm,
-} from '../types';
-import { getPackingObjectBounds, getRotatedBoundingBox } from './boundingBox';
+import { Euler, Matrix4 } from 'three';
+import type { ContainerSpec, GridPackingResult, OrientationCandidateResult, OrientationOptimizationResult, PackingObject, RotationDeg, Vector3Mm } from '../types';
+import { getRotatedBoundingBox } from './boundingBox';
+import { getObjectVolume, isTopUp, isUprightCylinder } from './productGeometry';
+import { rotationDegreesToRadians } from './unitConversion';
 
 const EPSILON = 1e-6;
-
-const isInsideBounds = (
-  bounds: ReturnType<typeof getPackingObjectBounds>,
-  limits: { xMin: number; xMax: number; yMin: number; yMax: number; zMin: number; zMax: number },
-) =>
-  bounds.minX >= limits.xMin - EPSILON &&
-  bounds.maxX <= limits.xMax + EPSILON &&
-  bounds.minY >= limits.yMin - EPSILON &&
-  bounds.maxY <= limits.yMax + EPSILON &&
-  bounds.minZ >= limits.zMin - EPSILON &&
-  bounds.maxZ <= limits.zMax + EPSILON;
-
-const getInternalVolume = (container: ContainerSpec) => {
-  const { width, depth, height } = container.internalDimensions;
-
-  return width * depth * height;
+export const MAX_PREVIEW_OBJECTS = 1200;
+const volume = (container: ContainerSpec) => { const d = container.internalDimensions; return d.width * d.depth * d.height; };
+const countAlong = (available: number, size: number, spacing: number) => Math.max(0, Math.floor((available + spacing + EPSILON) / (size + spacing)));
+const empty = (container: ContainerSpec, warning: string): GridPackingResult => ({ countX: 0, countY: 0, countZ: 0, totalQuantity: 0, payloadLimitedQuantity: 0, totalWeight: 0, remainingPayload: container.maxPayloadKg, exceedsPayload: false, volumeUtilizationPercent: 0, positions: [], warning });
+const invalidReason = (container: ContainerSpec, object: PackingObject, spacing: number): string | null => {
+  if (![...Object.values(object.dimensions), ...Object.values(container.internalDimensions)].every(n => Number.isFinite(n) && n > 0) || !Object.values(object.rotation).every(Number.isFinite) || !Number.isFinite(object.weightKg) || object.weightKg < 0 || !Number.isFinite(spacing) || spacing < 0 || !Number.isFinite(container.maxPayloadKg) || container.maxPayloadKg < 0) return 'Dimensões, peso, folga ou rotação inválidos.';
+  if (object.keepTopUp && !isTopUp(object)) return 'Topo inclinado: use Buscar melhor orientação ou ajuste a rotação.';
+  return null;
 };
-
-const getPayloadLimitedQuantity = (
-  totalQuantity: number,
-  maxPayloadKg: number,
-  objectWeightKg: number,
-) => {
-  const weightLimitedQuantity = objectWeightKg > 0 ? Math.floor(maxPayloadKg / objectWeightKg) : totalQuantity;
-
-  return Math.min(totalQuantity, weightLimitedQuantity);
-};
-
-export const calculateGridPacking = (
-  container: ContainerSpec,
-  object: PackingObject,
-  spacingMm = 0,
-): GridPackingResult => {
-  const spacing = Math.max(0, spacingMm);
-  const { width: internalWidth, depth: internalDepth, height: internalHeight } = container.internalDimensions;
-  const originBounds = getRotatedBoundingBox(object);
-  const { width: effectiveWidth, depth: effectiveDepth, height: effectiveHeight } = originBounds;
-
-  const emptyResult = (warning?: string): GridPackingResult => ({
-    countX: 0,
-    countY: 0,
-    countZ: 0,
-    totalQuantity: 0,
-    payloadLimitedQuantity: 0,
-    totalWeight: 0,
-    remainingPayload: container.maxPayloadKg,
-    exceedsPayload: false,
-    volumeUtilizationPercent: 0,
-    positions: [],
-    warning,
-  });
-
-  if (effectiveWidth <= 0 || effectiveDepth <= 0 || effectiveHeight <= 0) {
-    return emptyResult('Object has invalid transformed dimensions.');
-  }
-
-  if (
-    effectiveWidth > internalWidth ||
-    effectiveDepth > internalDepth ||
-    effectiveHeight > internalHeight
-  ) {
-    return emptyResult('Object does not fit inside MB5.');
-  }
-
-  const stepX = effectiveWidth + spacing;
-  const stepY = effectiveDepth + spacing;
-  const stepZ = effectiveHeight + spacing;
-
-  const countX = Math.floor((internalWidth + spacing) / stepX);
-  const countY = Math.floor((internalDepth + spacing) / stepY);
-  const countZ = Math.floor((internalHeight + spacing) / stepZ);
-
-  const limits = {
-    xMin: -internalWidth / 2,
-    xMax: internalWidth / 2,
-    yMin: -internalDepth / 2,
-    yMax: internalDepth / 2,
-    zMin: 0,
-    zMax: internalHeight,
-  };
-
-  const firstPosition = {
-    x: limits.xMin - originBounds.minX,
-    y: limits.yMin - originBounds.minY,
-    z: limits.zMin - originBounds.minZ,
-  };
-
-  const positions: Vector3Mm[] = [];
-  let rejectedCount = 0;
-
-  for (let iz = 0; iz < countZ; iz += 1) {
-    for (let iy = 0; iy < countY; iy += 1) {
-      for (let ix = 0; ix < countX; ix += 1) {
-        const position = {
-          x: firstPosition.x + ix * stepX,
-          y: firstPosition.y + iy * stepY,
-          z: firstPosition.z + iz * stepZ,
-        };
-        const bounds = getPackingObjectBounds(object, position);
-
-        if (isInsideBounds(bounds, limits)) {
-          positions.push(position);
-        } else {
-          rejectedCount += 1;
-        }
-      }
-    }
-  }
-
-  const totalQuantity = positions.length;
+const summarize = (container: ContainerSpec, object: PackingObject, counts: [number, number, number], totalQuantity: number, pattern: string, makePositions: (limit: number) => Vector3Mm[]): GridPackingResult => {
+  const payloadLimitedQuantity = Math.min(totalQuantity, object.weightKg > 0 ? Math.floor((container.maxPayloadKg + EPSILON) / object.weightKg) : totalQuantity);
   const totalWeight = totalQuantity * object.weightKg;
-  const remainingPayload = container.maxPayloadKg - totalWeight;
-  const exceedsPayload = totalWeight > container.maxPayloadKg;
-  const payloadLimitedQuantity = getPayloadLimitedQuantity(
-    totalQuantity,
-    container.maxPayloadKg,
-    object.weightKg,
-  );
-  const containerVolume = getInternalVolume(container);
-  const objectVolume = effectiveWidth * effectiveDepth * effectiveHeight;
-  const volumeUtilizationPercent =
-    containerVolume > 0 ? ((objectVolume * totalQuantity) / containerVolume) * 100 : 0;
-
-  if (rejectedCount > 0) {
-    console.warn(`${rejectedCount} generated object(s) were skipped because their Box3 exceeded MB5 limits.`);
-  }
-
+  const previewTruncated = payloadLimitedQuantity > MAX_PREVIEW_OBJECTS;
   const warnings = [
-    exceedsPayload ? 'Payload limit exceeded.' : undefined,
-    rejectedCount > 0 ? `${rejectedCount} generated object(s) were skipped because their Box3 exceeded MB5 limits.` : undefined,
+    totalQuantity === 0 ? 'Produto não cabe no volume útil.' : '',
+    totalWeight > container.maxPayloadKg + EPSILON ? 'A capacidade geométrica excede o peso permitido. O preenchimento respeita o limite de carga.' : '',
+    previewTruncated ? `Prévia limitada a ${MAX_PREVIEW_OBJECTS} peças; capacidade calculada: ${payloadLimitedQuantity}.` : '',
   ].filter(Boolean);
-
-  return {
-    countX,
-    countY,
-    countZ,
-    totalQuantity,
-    payloadLimitedQuantity,
-    totalWeight,
-    remainingPayload,
-    exceedsPayload,
-    volumeUtilizationPercent,
-    positions,
-    warning: warnings.length > 0 ? warnings.join(' ') : undefined,
-  };
+  return { countX: counts[0], countY: counts[1], countZ: counts[2], totalQuantity, payloadLimitedQuantity, totalWeight, remainingPayload: container.maxPayloadKg - totalWeight, exceedsPayload: totalWeight > container.maxPayloadKg + EPSILON, volumeUtilizationPercent: getObjectVolume(object) * payloadLimitedQuantity / volume(container) * 100, positions: makePositions(Math.min(payloadLimitedQuantity, MAX_PREVIEW_OBJECTS)), pattern, previewTruncated, warning: warnings.join(' ') || undefined };
 };
 
-const getOrientationCandidates = (object: PackingObject): RotationDeg[] => {
-  if (object.type === 'cylinder') {
-    return [
-      { x: 0, y: 0, z: 0 },
-      { x: 0, y: 90, z: 0 },
-      { x: 90, y: 0, z: 0 },
-    ];
-  }
-
-  return [0, 90].flatMap((x) =>
-    [0, 90].flatMap((y) => [0, 90].map((z) => ({ x, y, z }))),
-  );
-};
-
-const compareOrientationCandidates = (
-  candidateA: OrientationCandidateResult,
-  candidateB: OrientationCandidateResult,
-) => {
-  const resultA = candidateA.packingResult;
-  const resultB = candidateB.packingResult;
-
-  return (
-    resultA.payloadLimitedQuantity - resultB.payloadLimitedQuantity ||
-    resultA.totalQuantity - resultB.totalQuantity ||
-    resultA.volumeUtilizationPercent - resultB.volumeUtilizationPercent ||
-    candidateB.unusedVolumeMm3 - candidateA.unusedVolumeMm3
-  );
-};
-
-export const findBestOrientation = (
-  container: ContainerSpec,
-  object: PackingObject,
-  spacingMm = 0,
-): OrientationOptimizationResult | null => {
-  const internalVolumeMm3 = getInternalVolume(container);
-  const candidates = getOrientationCandidates(object).map((rotation) => {
-    const candidateObject = { ...object, rotation };
-    const packingResult = calculateGridPacking(container, candidateObject, spacingMm);
-    const bounds = getRotatedBoundingBox(candidateObject);
-    const occupiedVolumeMm3 = bounds.width * bounds.depth * bounds.height * packingResult.totalQuantity;
-
-    return {
-      rotation,
-      packingResult,
-      unusedVolumeMm3: Math.max(0, internalVolumeMm3 - occupiedVolumeMm3),
-    };
+export const calculateGridPacking = (container: ContainerSpec, object: PackingObject, spacingMm = 0): GridPackingResult => {
+  const invalid = invalidReason(container, object, spacingMm); if (invalid) return empty(container, invalid);
+  const d = container.internalDimensions;
+  const b = getRotatedBoundingBox(object);
+  const nx = countAlong(d.width, b.width, spacingMm), ny = countAlong(d.depth, b.depth, spacingMm), nz = countAlong(d.height, b.height, spacingMm);
+  return summarize(container, object, [nx, ny, nz], nx * ny * nz, 'Grade retangular', limit => {
+    const positions: Vector3Mm[] = [];
+    for (let z = 0; z < nz && positions.length < limit; z++) for (let y = 0; y < ny && positions.length < limit; y++) for (let x = 0; x < nx && positions.length < limit; x++) positions.push({ x: -d.width / 2 + b.width / 2 + x * (b.width + spacingMm), y: -d.depth / 2 + b.depth / 2 + y * (b.depth + spacingMm), z: b.height / 2 + z * (b.height + spacingMm) });
+    return positions;
   });
+};
 
-  const bestCandidate = candidates.reduce<OrientationCandidateResult | null>((best, candidate) => {
-    if (!best || compareOrientationCandidates(candidate, best) > 0) {
-      return candidate;
+// Hexagonal rows apply only to vertical circular cylinders. Layers remain vertically aligned.
+const calculateHexPacking = (container: ContainerSpec, object: PackingObject, spacing: number, transpose: boolean, phase: number): GridPackingResult => {
+  const d = container.internalDimensions, diameter = object.dimensions.width, height = object.dimensions.height;
+  const across = transpose ? d.depth : d.width, along = transpose ? d.width : d.depth;
+  const pitch = diameter + spacing, rowPitch = pitch * Math.sqrt(3) / 2;
+  const rowCount = Math.max(0, Math.floor((along - diameter + EPSILON) / rowPitch) + 1);
+  const layers = countAlong(d.height, height, spacing);
+  const rows = Array.from({ length: rowCount }, (_, index) => {
+    const offset = (index + phase) % 2 * pitch / 2;
+    return { offset, count: countAlong(across - offset, diameter, spacing) };
+  });
+  const perLayer = rows.reduce((sum, row) => sum + row.count, 0);
+  return summarize(container, object, [rows.reduce((n,r) => Math.max(n,r.count),0), rowCount, layers], perLayer * layers, `Cilindros alternados · ${transpose ? 'Y' : 'X'}`, limit => {
+    const positions: Vector3Mm[] = [];
+    for (let z = 0; z < layers && positions.length < limit; z++) for (let row = 0; row < rowCount && positions.length < limit; row++) for (let col = 0; col < rows[row].count && positions.length < limit; col++) {
+      const a = -across / 2 + diameter / 2 + rows[row].offset + col * pitch;
+      const b = -along / 2 + diameter / 2 + row * rowPitch;
+      positions.push({ x: transpose ? b : a, y: transpose ? a : b, z: height / 2 + z * (height + spacing) });
     }
-
-    return best;
-  }, null);
-
-  if (!bestCandidate) {
-    return null;
+    return positions;
+  });
+};
+const compare = (a: GridPackingResult, b: GridPackingResult) => a.payloadLimitedQuantity - b.payloadLimitedQuantity || a.totalQuantity - b.totalQuantity;
+export const calculateBestPacking = (container: ContainerSpec, object: PackingObject, spacingMm = 0): GridPackingResult => {
+  let best = calculateGridPacking(container, object, spacingMm);
+  if (invalidReason(container, object, spacingMm) || !isUprightCylinder(object)) return best;
+  for (const transpose of [false, true]) for (const phase of [0, 1]) {
+    const candidate = calculateHexPacking(container, object, spacingMm, transpose, phase);
+    if (compare(candidate, best) > 0) best = candidate;
   }
+  return best;
+};
 
-  return {
-    ...bestCandidate,
-    testedCount: candidates.length,
-    reason:
-      'Selected by highest payload-limited quantity, then geometrical capacity, volume utilization, and lowest unused internal volume.',
-  };
+export const findBestOrientation = (container: ContainerSpec, object: PackingObject, spacingMm = 0): OrientationOptimizationResult | null => {
+  const rotations: RotationDeg[] = [object.rotation];
+  for (const x of [0,90,180,270]) for (const y of [0,90,180,270]) for (const z of [0,90,180,270]) rotations.push({x,y,z});
+  const seen = new Set<string>();
+  let best: OrientationCandidateResult | null = null, testedCount = 0;
+  for (const rotation of rotations) {
+    if (object.keepTopUp && !isTopUp(object, rotation)) continue;
+    const key = new Matrix4().makeRotationFromEuler(new Euler(...rotationDegreesToRadians(rotation), 'XYZ')).elements.map(n => Math.round(n * 1e6)).join(',');
+    if (seen.has(key)) continue;
+    seen.add(key); testedCount++;
+    const packingResult = calculateBestPacking(container, { ...object, rotation }, spacingMm);
+    const candidate = { rotation, packingResult, unusedVolumeMm3: Math.max(0, volume(container) - getObjectVolume(object) * packingResult.payloadLimitedQuantity) };
+    if (!best || compare(candidate.packingResult, best.packingResult) > 0) best = candidate;
+  }
+  return best ? { ...best, testedCount, reason: 'Maior quantidade dentro do limite de carga, depois capacidade geométrica. Compara rotação atual e orientações de 90°, respeitando o topo. Não garante ótimo global.' } : null;
 };

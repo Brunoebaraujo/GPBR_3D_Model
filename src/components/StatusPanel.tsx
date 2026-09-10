@@ -9,28 +9,28 @@ export function StatusPanel({ validation }: StatusPanelProps) {
   return (
     <footer className="status-panel">
       <div className={validation.fits ? 'status-pill positive' : 'status-pill negative'}>
-        Fits: {validation.fits ? 'Yes' : 'No'}
+        {validation.fits ? 'Sem alertas' : 'Revisar'}
       </div>
       <div>
-        <span>Volume utilization</span>
+        <span>Ocupação da cena</span>
         <strong>{formatNumber(validation.volumeUtilizationPercent)}%</strong>
       </div>
       <div>
-        <span>Total object weight</span>
+        <span>Peso na cena</span>
         <strong>{formatNumber(validation.totalObjectWeightKg)} kg</strong>
       </div>
       <div>
-        <span>Remaining payload</span>
+        <span>Carga restante</span>
         <strong>{formatNumber(validation.remainingPayloadKg)} kg</strong>
       </div>
       <div>
-        <span>Objects</span>
+        <span>Peças na cena</span>
         <strong>{validation.objectCount}</strong>
       </div>
       <div className="warnings">
-        <span>Active warnings</span>
+        <span>Alertas da cena</span>
         {validation.warnings.length === 0 ? (
-          <strong>None</strong>
+          <strong>Nenhum</strong>
         ) : (
           <ul>
             {validation.warnings.map((warning) => (

@@ -120,3 +120,26 @@ src/
 ## Current Scope Limits
 
 This MVP intentionally does not include login, authentication, database storage, CAD upload, physics, drag-and-drop, PDF export, or automatic packing optimization.
+
+
+## Product studio
+
+Use **Criar produto** to open the dedicated editor. Draw one square, rectangle or circle on the XY plane by dragging, or enter exact millimeter dimensions. Set extrusion height along Z, then choose **Extrudar perfil**. A square extrusion can have an independent height; it is a square-based prism, not necessarily a cube.
+
+In the 3D view, rotate the solid using the transform rings or X/Y/Z degree fields. Camera orbit and object rotation remain separate. Choose a top face from the selector or click a face after enabling **Definir topo**. Green identifies the chosen top and orange its opposite. Cylinders support either flat cap as top. The optional **Manter topo para cima** constraint filters nesting orientations; manual rotation can violate it, but fill is blocked until corrected or optimized.
+
+**Usar no nesting** adds or updates the product and selects it. **Buscar melhor orientação** compares the current rotation plus unique orthogonal orientations; **Preencher Goodpack** previews one selected product with the requested clearance. Product definitions are retained when clearing a fill. Definitions and drafts currently live in the active browser session; refreshing the page resets them.
+
+### Calculation behavior and limits
+
+- Preserves the repository's MB5 specification: usable 1090 × 1437 × 1020 mm, payload 1650 kg. No additional Goodpack SKUs are inferred.
+- Rectangular solids use a uniform grid with analytical rotated bounds. Vertical circular cylinders also compare staggered rows in both planar directions and row phases.
+- Rank by payload-limited quantity, then geometric capacity. These are heuristic candidates, not a proof of global optimality. Mixed orientations in the same fill, mixed SKUs, irregular profiles, holes and Boolean composition are not supported.
+- Actual material volume determines utilization, independent of rotation; cylinder volume uses πr²h. Search utilization uses the payload-limited count. The footer describes only objects currently rendered.
+- Fill never exceeds payload. At most 1200 pieces are rendered; the exact computed capacity and truncation warning remain visible.
+- Validates container bounds, required top orientation, payload, box collisions and upright cylinder collisions. Tilted cylinders and cylinder/block pairs use conservative oriented envelopes and are labeled as possible overlaps.
+- Does not model compression, deformation, load bearing, stability, dunnage or handling restrictions beyond the explicit top constraint and spacing.
+
+### Verification
+
+Run `npm test` for calculation regression coverage and `npm run build` for TypeScript and production compilation. Tests cover top constraints on every face, rotated bounds, payload, cylinder spacing, overlaps, geometric capacity and bounded preview generation.
