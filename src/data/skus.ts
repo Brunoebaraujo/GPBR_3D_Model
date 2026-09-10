@@ -29,8 +29,8 @@ export const STARTER_OBJECTS: PackingObject[] = [
     weightKg: 75,
     position: {
       x: 0,
-      y: 110,
-      z: 0,
+      y: 0,
+      z: 110,
     },
     rotation: {
       x: 0,

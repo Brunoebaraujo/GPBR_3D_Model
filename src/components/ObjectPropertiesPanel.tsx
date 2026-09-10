@@ -1,3 +1,4 @@
+import { TOP_FACES } from '../utils/productGeometry';
 import type {
   DimensionsMm,
   GridPackingResult,
@@ -5,6 +6,7 @@ import type {
   PackingObject,
   RotationDeg,
   TransformMode,
+  TopFace,
   Vector3Mm,
 } from '../types';
 import { formatNumber } from '../utils/unitConversion';
@@ -50,9 +52,9 @@ export function ObjectPropertiesPanel({
   if (!selectedObject) {
     return (
       <aside className="panel properties-panel">
-        <p className="eyebrow">Properties</p>
-        <h2>No object selected</h2>
-        <p className="muted">Select an object in the scene to edit its dimensions, weight, position, and rotation.</p>
+        <p className="eyebrow">Propriedades</p>
+        <h2>Nenhum produto selecionado</h2>
+        <p className="muted">Selecione um produto na lista ou na cena para editar.</p>
       </aside>
     );
   }
@@ -62,12 +64,11 @@ export function ObjectPropertiesPanel({
   };
 
   const updateDimension = (field: DimensionField, value: string) => {
-    update({
-      dimensions: {
-        ...selectedObject.dimensions,
-        [field]: Math.max(1, numberValue(value)),
-      },
-    });
+    const size = Math.max(1, numberValue(value));
+    const dimensions = { ...selectedObject.dimensions, [field]: size };
+    if (selectedObject.type === 'cylinder' && field !== 'height') dimensions.width = dimensions.depth = size;
+    if (selectedObject.type === 'cube') dimensions.width = dimensions.depth = dimensions.height = size;
+    update({ dimensions });
   };
 
   const updatePosition = (field: PositionField, value: string) => {
@@ -90,16 +91,16 @@ export function ObjectPropertiesPanel({
 
   return (
     <aside className="panel properties-panel">
-      <p className="eyebrow">Properties</p>
+      <p className="eyebrow">Propriedades</p>
       <h2>{selectedObject.name}</h2>
 
       <label className="field">
-        <span>Name</span>
+        <span>Nome</span>
         <input value={selectedObject.name} onChange={(event) => update({ name: event.target.value })} />
       </label>
 
       <label className="field">
-        <span>Weight kg</span>
+        <span>Peso por unidade (kg)</span>
         <input
           type="number"
           min="0"
@@ -110,30 +111,30 @@ export function ObjectPropertiesPanel({
       </label>
 
       <div className="section">
-        <h3>Mouse transform</h3>
+        <h3>Manipular com o mouse</h3>
         <div className="segmented-control">
           <button
             type="button"
             className={transformMode === 'translate' ? 'active' : ''}
             onClick={() => onTransformModeChange('translate')}
           >
-            Translate
+            Mover
           </button>
           <button
             type="button"
             className={transformMode === 'rotate' ? 'active' : ''}
             onClick={() => onTransformModeChange('rotate')}
           >
-            Rotate
+            Girar
           </button>
         </div>
       </div>
 
       <div className="section">
-        <h3>Dimensions mm</h3>
+        <h3>Dimensões (mm)</h3>
         <div className="grid-fields">
           <label className="field">
-            <span>Width</span>
+            <span>Largura X</span>
             <input
               type="number"
               min="1"
@@ -142,7 +143,7 @@ export function ObjectPropertiesPanel({
             />
           </label>
           <label className="field">
-            <span>Depth</span>
+            <span>Profundidade Y</span>
             <input
               type="number"
               min="1"
@@ -151,7 +152,7 @@ export function ObjectPropertiesPanel({
             />
           </label>
           <label className="field">
-            <span>Height</span>
+            <span>Altura Z</span>
             <input
               type="number"
               min="1"
@@ -163,7 +164,7 @@ export function ObjectPropertiesPanel({
       </div>
 
       <div className="section">
-        <h3>Position mm</h3>
+        <h3>Posição (mm)</h3>
         <div className="grid-fields">
           <label className="field">
             <span>X</span>
@@ -193,7 +194,7 @@ export function ObjectPropertiesPanel({
       </div>
 
       <div className="section">
-        <h3>Rotation deg</h3>
+        <h3>Rotação (graus)</h3>
         <div className="grid-fields">
           <label className="field">
             <span>X</span>
@@ -222,10 +223,11 @@ export function ObjectPropertiesPanel({
         </div>
       </div>
 
+      <div className="section"><h3>Topo do produto</h3><label className="field"><span>Face superior</span><select value={selectedObject.topFace ?? '+z'} onChange={e => update({ topFace: e.target.value as TopFace })}>{TOP_FACES.filter(face => selectedObject.type !== 'cylinder' || face.value.endsWith('z')).map(face => <option key={face.value} value={face.value}>{face.label}</option>)}</select></label><label className="checkbox-field"><input type="checkbox" checked={selectedObject.keepTopUp ?? false} onChange={e => update({ keepTopUp: e.target.checked })} />Manter topo para cima</label></div>
       <div className="section fill-section">
-        <h3>Fill container</h3>
+        <h3>Preencher Goodpack</h3>
         <label className="field">
-          <span>Spacing mm</span>
+          <span>Folga entre peças (mm)</span>
           <input
             type="number"
             min="0"
@@ -235,46 +237,47 @@ export function ObjectPropertiesPanel({
         </label>
         <div className="button-stack">
           <button type="button" onClick={onFindBestOrientation}>
-            Find best orientation
+            Buscar melhor orientação
           </button>
           <button type="button" onClick={onFillContainer}>
-            Fill container
+            Preencher Goodpack
           </button>
           <button type="button" onClick={onClearAutoFill}>
-            Clear auto-fill
+            Limpar preenchimento
           </button>
         </div>
         {orientationResult ? (
           <div className="fill-summary">
+            <p><strong>{lastPackingResult?.pattern}</strong></p>
             <dl>
               <div>
-                <dt>Best rotation</dt>
+                <dt>Melhor rotação</dt>
                 <dd>
                   X {orientationResult.rotation.x} / Y {orientationResult.rotation.y} / Z {orientationResult.rotation.z}
                 </dd>
               </div>
               <div>
-                <dt>Tested orientations</dt>
+                <dt>Orientações testadas</dt>
                 <dd>{orientationResult.testedCount}</dd>
               </div>
               <div>
-                <dt>Geometrical capacity</dt>
-                <dd>{orientationResult.packingResult.totalQuantity} objects</dd>
+                <dt>Capacidade geométrica</dt>
+                <dd>{orientationResult.packingResult.totalQuantity} peças</dd>
               </div>
               <div>
-                <dt>Payload-limited capacity</dt>
-                <dd>{orientationResult.packingResult.payloadLimitedQuantity} objects</dd>
+                <dt>Capacidade por peso</dt>
+                <dd>{orientationResult.packingResult.payloadLimitedQuantity} peças</dd>
               </div>
               <div>
-                <dt>Geometrical total weight</dt>
+                <dt>Peso da capacidade geométrica</dt>
                 <dd>{formatNumber(orientationResult.packingResult.totalWeight)} kg</dd>
               </div>
               <div>
-                <dt>Volume utilization</dt>
+                <dt>Ocupação com carga permitida</dt>
                 <dd>{formatNumber(orientationResult.packingResult.volumeUtilizationPercent)}%</dd>
               </div>
               <div>
-                <dt>Selection reason</dt>
+                <dt>Critério</dt>
                 <dd>{orientationResult.reason}</dd>
               </div>
             </dl>
@@ -282,36 +285,38 @@ export function ObjectPropertiesPanel({
         ) : null}
         {lastPackingResult ? (
           <div className="fill-summary">
+            <strong>{lastPackingResult.pattern}</strong>
+            <p className="muted">Prévia: {lastPackingResult.positions.length} peças. O preenchimento considera apenas este produto.</p>
             {lastPackingResult.warning ? <p className="warning-text">{lastPackingResult.warning}</p> : null}
             <dl>
               <div>
-                <dt>Grid</dt>
+                <dt>Colunas máx. × fileiras × camadas</dt>
                 <dd>
                   {lastPackingResult.countX} x {lastPackingResult.countY} x {lastPackingResult.countZ}
                 </dd>
               </div>
               <div>
-                <dt>Geometrical capacity</dt>
-                <dd>{lastPackingResult.totalQuantity} objects</dd>
+                <dt>Capacidade geométrica</dt>
+                <dd>{lastPackingResult.totalQuantity} peças</dd>
               </div>
               <div>
-                <dt>Payload-limited capacity</dt>
-                <dd>{lastPackingResult.payloadLimitedQuantity} objects</dd>
+                <dt>Capacidade por peso</dt>
+                <dd>{lastPackingResult.payloadLimitedQuantity} peças</dd>
               </div>
               <div>
-                <dt>Geometrical total weight</dt>
+                <dt>Peso da capacidade geométrica</dt>
                 <dd>{formatNumber(lastPackingResult.totalWeight)} kg</dd>
               </div>
               <div>
-                <dt>Remaining payload</dt>
+                <dt>Saldo na capacidade geométrica</dt>
                 <dd>{formatNumber(lastPackingResult.remainingPayload)} kg</dd>
               </div>
               <div>
-                <dt>Payload status</dt>
-                <dd>{lastPackingResult.exceedsPayload ? 'Exceeds payload limit' : 'Within payload limit'}</dd>
+                <dt>Capacidade geométrica × peso</dt>
+                <dd>{lastPackingResult.exceedsPayload ? 'Excede carga máxima' : 'Dentro do limite'}</dd>
               </div>
               <div>
-                <dt>Volume utilization</dt>
+                <dt>Ocupação com carga permitida</dt>
                 <dd>{formatNumber(lastPackingResult.volumeUtilizationPercent)}%</dd>
               </div>
             </dl>

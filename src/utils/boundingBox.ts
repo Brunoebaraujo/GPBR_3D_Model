@@ -1,72 +1,31 @@
-import { Box3, Vector3 } from 'three';
+import { Box3, Euler, Matrix4, Vector3 } from 'three';
 import type { DimensionsMm, PackingObject, Vector3Mm } from '../types';
-import { createPackingMesh } from './createPackingMesh';
+import { rotationDegreesToRadians } from './unitConversion';
 
 export interface RotatedBoundingBox extends DimensionsMm {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  minZ: number;
-  maxZ: number;
+  minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number;
 }
 
-const EPSILON = 1e-7;
-
-const normalizeValue = (value: number): number => {
-  if (Math.abs(value) < EPSILON) {
-    return 0;
-  }
-
-  const nearestInteger = Math.round(value);
-
-  return Math.abs(value - nearestInteger) < EPSILON ? nearestInteger : value;
+// Analytical bounds: exact for boxes and circular cylinders, without tessellation error.
+export const getRotatedBoundingBox = (object: PackingObject): RotatedBoundingBox => {
+  const { width, depth, height } = object.dimensions;
+  const e = new Matrix4().makeRotationFromEuler(new Euler(...rotationDegreesToRadians(object.rotation), 'XYZ')).elements;
+  const extent = (row: number) => object.type === 'cylinder'
+    ? Math.abs(e[row + 4]) * height / 2 + width / 2 * Math.hypot(e[row], e[row + 8])
+    : (Math.abs(e[row]) * width + Math.abs(e[row + 4]) * height + Math.abs(e[row + 8]) * depth) / 2;
+  const halfX = extent(0), halfY = extent(2), halfZ = extent(1);
+  return { width: 2 * halfX, depth: 2 * halfY, height: 2 * halfZ, minX: -halfX, maxX: halfX, minY: -halfY, maxY: halfY, minZ: -halfZ, maxZ: halfZ };
 };
-
-const disposeMesh = (mesh: ReturnType<typeof createPackingMesh>) => {
-  mesh.geometry.dispose();
+export const getPackingObjectBounds = (object: PackingObject, position: Vector3Mm = object.position): RotatedBoundingBox => {
+  const b = getRotatedBoundingBox(object);
+  return { ...b, minX: b.minX + position.x, maxX: b.maxX + position.x, minY: b.minY + position.y, maxY: b.maxY + position.y, minZ: b.minZ + position.z, maxZ: b.maxZ + position.z };
 };
-
-const convertThreeBoxToPackingBox = (box: Box3): Box3 =>
-  new Box3(
-    new Vector3(box.min.x, box.min.z, box.min.y),
-    new Vector3(box.max.x, box.max.z, box.max.y),
-  );
-
 export const getPackingObjectBox = (object: PackingObject, position?: Vector3Mm): Box3 => {
-  const mesh = createPackingMesh(object, position);
-  const threeBox = new Box3().setFromObject(mesh);
-  disposeMesh(mesh);
-
-  return convertThreeBoxToPackingBox(threeBox);
+  const b = getPackingObjectBounds(object, position);
+  return new Box3(new Vector3(b.minX, b.minY, b.minZ), new Vector3(b.maxX, b.maxY, b.maxZ));
 };
-
-const toRotatedBoundingBox = (box: Box3): RotatedBoundingBox => {
-  const size = box.getSize(new Vector3());
-
-  return {
-    width: normalizeValue(size.x),
-    depth: normalizeValue(size.y),
-    height: normalizeValue(size.z),
-    minX: normalizeValue(box.min.x),
-    maxX: normalizeValue(box.max.x),
-    minY: normalizeValue(box.min.y),
-    maxY: normalizeValue(box.max.y),
-    minZ: normalizeValue(box.min.z),
-    maxZ: normalizeValue(box.max.z),
-  };
-};
-
-export const getRotatedBoundingBox = (object: PackingObject): RotatedBoundingBox =>
-  toRotatedBoundingBox(getPackingObjectBox(object, { x: 0, y: 0, z: 0 }));
-
 export const getRotatedBoundingBoxDimensions = (object: PackingObject): DimensionsMm => {
   const { width, depth, height } = getRotatedBoundingBox(object);
-
   return { width, depth, height };
 };
-
-export const getPackingObjectBounds = (object: PackingObject, position = object.position): RotatedBoundingBox =>
-  toRotatedBoundingBox(getPackingObjectBox(object, position));
-
 export const calculateRotatedBoundingBox = getRotatedBoundingBox;
