@@ -44,7 +44,7 @@ export function Sidebar({ onAddObject, onCreateProduct, onEditProduct, objects, 
         </div>
       </dl>
 
-      <p className="muted">Nesting de um produto por simulação. Compare grade e arranjo alternado para cilindros verticais. Não considera deformação ou resistência ao empilhamento.</p>
+      <p className="muted">Nesting de um produto por simulação. Escolha orientação única ou combine giros nas sobras. Não considera deformação ou resistência ao empilhamento.</p>
       <div className="section orientation-legend">
         <h2>Orientação</h2>
         <div className="legend-items" aria-label="Object face color legend">

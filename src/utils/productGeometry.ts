@@ -1,4 +1,4 @@
-import { Euler, Vector3 } from 'three';
+import { Euler, Matrix4, Vector3 } from 'three';
 import type { PackingObject, RotationDeg, TopFace } from '../types';
 import { rotationDegreesToRadians } from './unitConversion';
 
@@ -32,4 +32,18 @@ export const faceColor = (object: PackingObject, index: number) => {
   const top = object.topFace ?? '+z';
   const opposite = `${top[0] === '+' ? '-' : '+'}${top[1]}`;
   return face === top ? '#16a05d' : face === opposite ? '#e06a2d' : object.color;
+};
+
+// Preserve the current rotation first; enumerate the 24 unique orthogonal orientations.
+export const getAllowedRotations = (object: PackingObject): RotationDeg[] => {
+  const candidates: RotationDeg[] = [object.rotation];
+  for (const x of [0, 90, 180, 270]) for (const y of [0, 90, 180, 270]) for (const z of [0, 90, 180, 270]) candidates.push({ x, y, z });
+  const seen = new Set<string>();
+  return candidates.filter(rotation => {
+    if (!Object.values(rotation).every(Number.isFinite) || (object.keepTopUp && !isTopUp(object, rotation))) return false;
+    const key = new Matrix4().makeRotationFromEuler(new Euler(...rotationDegreesToRadians(rotation), 'XYZ')).elements.map(n => Math.round(n * 1e6)).join(',');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 };

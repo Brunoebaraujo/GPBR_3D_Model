@@ -1,15 +1,13 @@
-import { Euler, Matrix4 } from 'three';
-import type { ContainerSpec, GridPackingResult, OrientationCandidateResult, OrientationOptimizationResult, PackingObject, RotationDeg, Vector3Mm } from '../types';
+import type { ContainerSpec, GridPackingResult, OrientationCandidateResult, OrientationOptimizationResult, PackingObject, Vector3Mm } from '../types';
 import { getRotatedBoundingBox } from './boundingBox';
-import { getObjectVolume, isTopUp, isUprightCylinder } from './productGeometry';
-import { rotationDegreesToRadians } from './unitConversion';
+import { getAllowedRotations, getObjectVolume, isTopUp, isUprightCylinder } from './productGeometry';
 
 const EPSILON = 1e-6;
 export const MAX_PREVIEW_OBJECTS = 1200;
 const volume = (container: ContainerSpec) => { const d = container.internalDimensions; return d.width * d.depth * d.height; };
 const countAlong = (available: number, size: number, spacing: number) => Math.max(0, Math.floor((available + spacing + EPSILON) / (size + spacing)));
 const empty = (container: ContainerSpec, warning: string): GridPackingResult => ({ countX: 0, countY: 0, countZ: 0, totalQuantity: 0, payloadLimitedQuantity: 0, totalWeight: 0, remainingPayload: container.maxPayloadKg, exceedsPayload: false, volumeUtilizationPercent: 0, positions: [], warning });
-const invalidReason = (container: ContainerSpec, object: PackingObject, spacing: number): string | null => {
+export const invalidReason = (container: ContainerSpec, object: PackingObject, spacing: number): string | null => {
   if (![...Object.values(object.dimensions), ...Object.values(container.internalDimensions)].every(n => Number.isFinite(n) && n > 0) || !Object.values(object.rotation).every(Number.isFinite) || !Number.isFinite(object.weightKg) || object.weightKg < 0 || !Number.isFinite(spacing) || spacing < 0 || !Number.isFinite(container.maxPayloadKg) || container.maxPayloadKg < 0) return 'Dimensões, peso, folga ou rotação inválidos.';
   if (object.keepTopUp && !isTopUp(object)) return 'Topo inclinado: use Buscar melhor orientação ou ajuste a rotação.';
   return null;
@@ -71,19 +69,20 @@ export const calculateBestPacking = (container: ContainerSpec, object: PackingOb
   return best;
 };
 
-export const findBestOrientation = (container: ContainerSpec, object: PackingObject, spacingMm = 0): OrientationOptimizationResult | null => {
-  const rotations: RotationDeg[] = [object.rotation];
-  for (const x of [0,90,180,270]) for (const y of [0,90,180,270]) for (const z of [0,90,180,270]) rotations.push({x,y,z});
-  const seen = new Set<string>();
+export const findBestOrientation = (
+  container: ContainerSpec,
+  object: PackingObject,
+  spacingMm = 0,
+  calculate: typeof calculateBestPacking = calculateBestPacking,
+): OrientationOptimizationResult | null => {
   let best: OrientationCandidateResult | null = null, testedCount = 0;
-  for (const rotation of rotations) {
-    if (object.keepTopUp && !isTopUp(object, rotation)) continue;
-    const key = new Matrix4().makeRotationFromEuler(new Euler(...rotationDegreesToRadians(rotation), 'XYZ')).elements.map(n => Math.round(n * 1e6)).join(',');
-    if (seen.has(key)) continue;
-    seen.add(key); testedCount++;
-    const packingResult = calculateBestPacking(container, { ...object, rotation }, spacingMm);
+  for (const rotation of getAllowedRotations(object)) {
+    testedCount++;
+    const packingResult = calculate(container, { ...object, rotation }, spacingMm);
     const candidate = { rotation, packingResult, unusedVolumeMm3: Math.max(0, volume(container) - getObjectVolume(object) * packingResult.payloadLimitedQuantity) };
     if (!best || compare(candidate.packingResult, best.packingResult) > 0) best = candidate;
   }
-  return best ? { ...best, testedCount, reason: 'Maior quantidade dentro do limite de carga, depois capacidade geométrica. Compara rotação atual e orientações de 90°, respeitando o topo. Não garante ótimo global.' } : null;
+  return best ? { ...best, testedCount, reason: calculate === calculateBestPacking
+    ? 'Maior quantidade dentro do limite de carga, depois capacidade geométrica. Compara rotação atual e orientações de 90°, respeitando o topo. Não garante ótimo global.'
+    : 'Compara orientações principais e o preenchimento das sobras com outros giros permitidos. Prioriza quantidade dentro do limite de carga. Não garante ótimo global.' } : null;
 };

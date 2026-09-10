@@ -134,7 +134,7 @@ In the 3D view, rotate the solid using the transform rings or X/Y/Z degree field
 
 - Preserves the repository's MB5 specification: usable 1090 × 1437 × 1020 mm, payload 1650 kg. No additional Goodpack SKUs are inferred.
 - Rectangular solids use a uniform grid with analytical rotated bounds. Vertical circular cylinders also compare staggered rows in both planar directions and row phases.
-- Rank by payload-limited quantity, then geometric capacity. These are heuristic candidates, not a proof of global optimality. Mixed orientations in the same fill, mixed SKUs, irregular profiles, holes and Boolean composition are not supported.
+- Rank by payload-limited quantity, then geometric capacity. These are heuristic candidates, not a proof of global optimality. Mixed SKUs, irregular profiles, holes and Boolean composition are not supported. Mixed orientations are available through the residual-space mode described below.
 - Actual material volume determines utilization, independent of rotation; cylinder volume uses πr²h. Search utilization uses the payload-limited count. The footer describes only objects currently rendered.
 - Fill never exceeds payload. At most 1200 pieces are rendered; the exact computed capacity and truncation warning remain visible.
 - Validates container bounds, required top orientation, payload, box collisions and upright cylinder collisions. Tilted cylinders and cylinder/block pairs use conservative oriented envelopes and are labeled as possible overlaps.
@@ -143,3 +143,19 @@ In the 3D view, rotate the solid using the transform rings or X/Y/Z degree field
 ### Verification
 
 Run `npm test` for calculation regression coverage and `npm run build` for TypeScript and production compilation. Tests cover top constraints on every face, rotated bounds, payload, cylinder spacing, overlaps, geometric capacity and bounded preview generation.
+
+
+## Nesting modes
+
+The filling panel now offers two explicit modes:
+
+- **Orientação única** preserves the previous behavior: every product uses the same rotation, with grid or staggered vertical-cylinder rows.
+- **Orientações combinadas** keeps the maximal rectangular grid in the current principal rotation, then fills the remaining disjoint spaces with other allowed orthogonal orientations. **Buscar melhor combinação** also compares principal rotations before filling. The template is not mutated by either calculation.
+
+The combined search evaluates six orders of partitioning the remaining volume into side/end/top slabs, then greedily fills residual regions with up to 32 grid batches. Analytical envelopes and explicit clearance between regions prevent overlap. This is a bounded heuristic; it does not remove rows from the principal block or promise global optimality. Circular cylinders use conservative rectangular envelopes for mixed batches, and the original single-orientation solution, including hexagonal rows, is retained whenever the combined candidate does not improve its geometric capacity.
+
+Each generated piece carries its own rotation. Principal pieces retain their product color; supplementary orientations use purple body faces while the selected top remains green. The panel compares allowed capacity against the uniform solution with the same principal rotation and clearance, and reports geometric and payload-limited counts per orientation. Primary pieces receive payload allocation first. If payload removes the operational gain, this is explicitly reported. A truncated preview reserves representation for supplementary regions, while the summary retains complete calculated counts.
+
+**Manter topo para cima** remains authoritative: turning a box on its side is permitted only if the selected top can remain upward or that restriction is disabled. Stability, bearing surfaces, stack strength and handling sequence remain outside the geometric model.
+
+Regression coverage includes a 400 × 300 × 220 mm / 1 kg MB5 example (32 uniform versus 47 combined), clearance between residual batches, every selectable top, payload allocation, large previews, cylinder fallback, mode switching and deterministic varied dimensions/rotations.
