@@ -50,14 +50,7 @@ export const PackingObject = forwardRef<Group, PackingObjectProps>(function Pack
     group.position.set(x, y, z);
     group.rotation.set(rotationX, rotationY, rotationZ, 'XYZ');
     group.updateMatrixWorld(true);
-  }, [
-    object.position.x,
-    object.position.y,
-    object.position.z,
-    object.rotation.x,
-    object.rotation.y,
-    object.rotation.z,
-  ]);
+  }, [object.position, object.rotation]);
 
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();

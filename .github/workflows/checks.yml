@@ -1,8 +1,8 @@
-name: Check product studio
+name: Check packing and road studio
 on:
   pull_request:
   push:
-    branches: [feature/product-studio]
+    branches: [main, feature/product-studio, feat/mb6-road-loading]
 permissions:
   contents: read
 jobs:
@@ -15,5 +15,6 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npm test
       - run: npm run build

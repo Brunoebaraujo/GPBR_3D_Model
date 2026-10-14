@@ -1,3 +1,4 @@
+import process from 'node:process';
 import ts from 'typescript';
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { resolve, join } from 'node:path';
@@ -12,7 +13,7 @@ try {
     for (const file of readdirSync(`src/${folder}`).filter(f => f.endsWith('.ts'))) {
       const source = readFileSync(`src/${folder}/${file}`, 'utf8');
       let { outputText } = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext } });
-      outputText = outputText.replace(/from '(\.\.?\/[^']+)'/g, (all, path) => path.endsWith('.js') ? all : `from '${path}.js'`);
+      outputText = outputText.replace(/from (['"])(\.\.?\/[^'"]+)\1/g, (all, quote, path) => path.endsWith('.js') ? all : `from ${quote}${path}.js${quote}`);
       writeFileSync(join(output, folder, file.replace(/\.ts$/, '.js')), outputText);
     }
   }
@@ -187,6 +188,80 @@ try {
       const result = calculateMixedPacking(MB5_CONTAINER, { ...product, ...patch });
       assert.equal(result.placements.length, 0);
     }
+  });
+  const { MB6_CONTAINER } = await load('data/skus.js');
+  const { validateRoad, makeRoadUnit, findRoadPosition, moveRoadUnits, ROAD_PRESETS, footprint } = await load('utils/roadLoading.js');
+  const truck = { vehicle: {...ROAD_PRESETS.truck}, units: [], gap: 10 };
+  const base = makeRoadUnit('MB6',1000,'base');
+  test('MB6 uses the supplied internal dimensions and payload', () => {
+    assert.deepEqual(MB6_CONTAINER.internalDimensions,{width:1069,depth:1187,height:981});
+    assert.deepEqual(MB6_CONTAINER.externalDimensions,{width:1120,depth:1220,height:1076});
+    const result=calculateGridPacking(MB6_CONTAINER,product);
+    assert.equal(validateFit(clones(product,result),MB6_CONTAINER).fits,true);
+    assert.equal(MB6_CONTAINER.emptyWeightKg,115);
+  });
+  test('Road weight includes tare and missing capacity is explicitly unverified', () => {
+    const r=validateRoad({...truck,units:[base]});
+    assert.equal(r.total,1115);assert.equal(r.cargo,1000);assert.equal(r.tare,115);
+    assert.equal(r.valid,true);assert.ok(r.notices.some(n=>n.includes('peso do veículo não validado')));
+    assert.equal(validateRoad({...truck,vehicle:{...truck.vehicle,capacityKg:1114},units:[base]}).valid,false);
+    assert.equal(validateRoad({...truck,units:[{...base,cargoKg:1651}]}).valid,false);
+  });
+  test('Road envelopes enforce walls, gaps and contact without overlap', () => {
+    assert.equal(validateRoad({...truck,units:[{...base,x:1000}]}).valid,false);
+    assert.equal(validateRoad({...truck,units:[base,{...base,id:'overlap',x:1100}]}).valid,false);
+    const pair=[{...base,x:-565},{...base,id:'other',x:565}];
+    assert.equal(validateRoad({...truck,units:pair}).valid,true);
+    assert.equal(validateRoad({...truck,units:pair,gap:11}).valid,false);
+  });
+  test('Transit stacks require same model, alignment and a floor-supported base', () => {
+    const top={...base,id:'top',z:1076};
+    assert.equal(validateRoad({...truck,units:[base,top]}).valid,true);
+    for(const u of [{...top,x:1},{...top,z:1077},{...top,model:'MB5'},{...top,turned:true}]) assert.equal(validateRoad({...truck,units:[base,u]}).valid,false);
+    assert.equal(validateRoad({...truck,units:[top]}).valid,false);
+    assert.equal(validateRoad({...truck,vehicle:{...truck.vehicle,height:4000},units:[base,top,{...top,id:'third',z:2152}]}).valid,false);
+  });
+  test('Moving a complete stack preserves support and moving only its base is invalid', () => {
+    const state={...truck,units:[base,{...base,id:'top',z:1076}]};
+    const moved=moveRoadUnits(state,['base','top'],{x:100,y:200,z:0},false);
+    assert.equal(validateRoad({...state,units:moved}).valid,true);
+    assert.equal(validateRoad({...state,units:moveRoadUnits(state,['base'],{x:100,y:0,z:0},false)}).valid,false);
+    assert.equal(moveRoadUnits({...truck,units:[{...base,locked:true}]},['base'],{x:100,y:0,z:0},false)[0].x,0);
+  });
+  test('Assisted placement finds valid floor and stack positions for both models', () => {
+    for(const model of ['MB5','MB6']) {
+      let state={...truck,vehicle:{...ROAD_PRESETS.sider,capacityKg:26000},units:[]};
+      for(let i=0;i<30;i++) {
+        const next=findRoadPosition(state,makeRoadUnit(model,1000,String(i)));
+        if(!next)break;
+        state={...state,units:[...state.units,next]};
+        assert.equal(validateRoad(state).valid,true);
+      }
+      assert.ok(state.units.length>10);assert.ok(validateRoad(state).total<=26000);
+    }
+  });
+  test('Door checks allow unit-wise entry and distinguish sider side access', () => {
+    const low={...truck.vehicle,rearHeight:1000,rearWidth:2500};
+    assert.equal(validateRoad({...truck,vehicle:low,units:[base]}).valid,false);
+    assert.equal(validateRoad({...truck,vehicle:{...low,kind:'sider',sideHeight:2700},units:[base]}).valid,true);
+  });
+  test('Weight split and occupancy use external dimensions and only floor units', () => {
+    const state={...truck,units:[base,{...base,id:'top',z:1076}]},r=validateRoad(state);
+    assert.equal(r.frontWeight,r.rearWeight);
+    assert.equal(r.floorPercent,1120*1220/(2500*8280)*100);
+    assert.deepEqual(footprint({...base,turned:true}),{width:1220,length:1120,height:1076});
+  });
+  test('Snap reaches floor and wall without allowing an unsupported placement', () => {
+    const state={...truck,units:[base]};
+    const moved=moveRoadUnits(state,['base'],{x:-650,y:0,z:20},true);
+    assert.equal(moved[0].x,-680);assert.equal(moved[0].z,0);
+    assert.equal(validateRoad({...state,units:moved}).valid,true);
+  });
+  test('Invalid road inputs and excessive unit counts cannot pass validation', () => {
+    assert.equal(validateRoad({...truck,gap:NaN}).valid,false);
+    assert.equal(validateRoad({...truck,vehicle:{...truck.vehicle,width:0}}).valid,false);
+    assert.equal(validateRoad({...truck,units:[{...base,cargoKg:NaN}]}).valid,false);
+    assert.equal(validateRoad({...truck,units:[base,{...base}]}).valid,false);
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }
