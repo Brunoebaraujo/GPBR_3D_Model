@@ -210,8 +210,8 @@ e retornam à posição anterior ao soltar. Unidades travadas não se movem.
 - Caixas montadas e carregadas, sempre em pé; giros de 90° no piso.
 - Até dois níveis do mesmo modelo, alinhados e apoiados sobre uma unidade no piso.
 - Colisões, limites externos, folgas, carga útil por caixa e peso total embarcado.
-- Entrada avaliada por unidade. Não simula trajetória, manobra da empilhadeira,
-  entrada de uma pilha inteira, pilares, amarração, resistência do piso ou cargas
+- Entrada avaliada por unidade ou pela altura total de uma pilha adicionada em par.
+  Não simula trajetória, manobra da empilhadeira, pilares, amarração, resistência do piso ou cargas
   por eixo. Desconte intrusões das dimensões úteis antes de simular.
 - A divisão frente/traseira assume massa uniforme no envelope de cada unidade;
   não é um cálculo de reações nos eixos.
@@ -223,3 +223,48 @@ e retornam à posição anterior ao soltar. Unidades travadas não se movem.
 `src/utils/roadLoading.ts` concentra as regras geométricas sem dependência da
 interface. `npm test` cobre MB6, tara, limites, folgas, apoio, grupos, aberturas,
 posicionamento assistido e distribuição espacial, além dos testes do nesting.
+
+### Frota ampliada e inclusão direta de pilhas
+
+O seletor inclui os nove perfis da tabela fornecida pelo usuário:
+
+| Perfil | Carga útil aproximada, apenas referência | Largura interna aproximada | Acesso de referência |
+| --- | --- | --- | --- |
+| VUC | 1,5–3 t | 1,80–2,10 m | Traseiro |
+| Caminhão 3/4 | 3–4 t | 2,00–2,30 m | Traseiro |
+| Toco | 6–8 t | 2,30–2,48 m | Traseiro ou sider |
+| Truck (truque) | 12–14 t | 2,40–2,50 m | Traseiro ou sider |
+| Bitruck | 14–18 t | 2,40–2,50 m | Traseiro ou sider |
+| Carreta LS (3 eixos) | 25–28 t | 2,45–2,50 m | Traseiro ou sider |
+| Carreta sider (3 eixos) | 28–32 t | 2,45–2,50 m | Lateral e traseiro |
+| Bitrem | 35–38 t | 2,45–2,50 m | Traseiro ou sider |
+| Rodotrem | 45–50 t | 2,45–2,50 m | Traseiro ou sider |
+
+Essas faixas foram transcritas da imagem enviada em 14/10/2026. Não são limites
+legais certificados nem especificações de um veículo particular. Não alimentam
+automaticamente o limite de peso. Comprimento e altura não estavam na imagem;
+os novos perfis exigem informar as três dimensões úteis antes de carregar.
+Truck e sider mantêm os exemplos dimensionais da entrega anterior; a silhueta é
+esquemática e não certifica configuração de eixos.
+
+Bitrem e rodotrem têm **dois compartimentos independentes**, com comprimento,
+largura e altura próprios. Escolha o compartimento antes de configurar ou
+adicionar. As coordenadas são locais a cada piso. O vão visual entre carrocerias
+(1,8 m no bitrem e 3 m no rodotrem) é apenas esquemático e nunca entra na área ou
+no volume útil. Colisões e apoio são avaliados dentro de cada compartimento;
+uma caixa em outro compartimento nunca serve de apoio. O peso total é somado
+no conjunto; não há validação dos limites individuais dos implementos.
+
+Em **Adicionar Goodpack**, escolha **Pilha de 2**. Cada clique inclui uma base e
+uma caixa superior alinhada do mesmo modelo, mesmo com o piso vazio. A inclusão
+é atômica: as duas precisam caber e respeitar juntas o limite de peso; se não,
+nenhuma é incluída. A abertura informada precisa comportar a altura total da
+pilha. Com aberturas desconhecidas, o cenário mantém o aviso de validação
+incompleta. Para duas carrocerias, informe a menor abertura de ambas.
+
+**Selecionar pilha inteira ao clicar** permite mover, girar, duplicar ou excluir
+as duas caixas juntas. Desative para editar uma caixa individual. As coordenadas
+de um grupo usam a primeira caixa como referência. O modo **Unidade** e o botão
+**Empilhar cópia** continuam disponíveis para montagem individual. Desfazer/refazer
+trata a inclusão de uma pilha como uma única ação. **Limpar toda a carga** também
+pode ser desfeito, facilitando a troca para um perfil ainda sem dimensões.

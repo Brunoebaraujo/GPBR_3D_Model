@@ -12,6 +12,10 @@ import type { Group } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import {
   footprint,
+  cargoBodies,
+  bodyOffset,
+  couplingGap,
+  sceneLength,
   moveRoadUnits,
   validateRoad,
   type RoadState,
@@ -62,75 +66,107 @@ function Vehicle({
   sides,
 }: Pick<Props, "state" | "opacity" | "roof" | "sides">) {
   const v = state.vehicle,
-    w = v.width / 1000,
-    h = v.height / 1000,
-    l = v.length / 1000;
+    bodies = cargoBodies(v),
+    length = sceneLength(v) / 1000,
+    firstWidth = v.width / 1000;
   return (
     <group>
-      <Box size={[w, 0.08, l]} position={[0, -0.05, 0]} color="#63788a" />
-      {sides && (
-        <>
-          <Box
-            size={[0.015, h, l]}
-            position={[-w / 2, h / 2, 0]}
-            color="#88bbcb"
-            opacity={opacity}
-          />
-          <Box
-            size={[0.015, h, l]}
-            position={[w / 2, h / 2, 0]}
-            color="#88bbcb"
-            opacity={opacity}
-          />
-        </>
-      )}
-      {roof && (
+      {bodies.map((body, index) => {
+        const w = body.width / 1000,
+          h = body.height / 1000,
+          l = body.length / 1000;
+        return (
+          <group key={index} position={[0, 0, bodyOffset(v, index) / 1000]}>
+            <Box size={[w, 0.08, l]} position={[0, -0.05, 0]} color="#63788a" />
+            {sides && (
+              <>
+                <Box
+                  size={[0.015, h, l]}
+                  position={[-w / 2, h / 2, 0]}
+                  color="#88bbcb"
+                  opacity={opacity}
+                />
+                <Box
+                  size={[0.015, h, l]}
+                  position={[w / 2, h / 2, 0]}
+                  color="#88bbcb"
+                  opacity={opacity}
+                />
+              </>
+            )}
+            {roof && (
+              <Box
+                size={[w, 0.015, l]}
+                position={[0, h, 0]}
+                color="#88bbcb"
+                opacity={opacity}
+              />
+            )}
+            <Box
+              size={[w, h, 0.015]}
+              position={[0, h / 2, -l / 2]}
+              color="#88bbcb"
+              opacity={opacity}
+            />
+            <Box
+              size={[w, h, 0.015]}
+              position={[0, h / 2, l / 2]}
+              color="#88bbcb"
+              opacity={opacity}
+            />
+            {[-w / 2, w / 2].map((x) =>
+              [l / 2 - 0.7, l / 2 - 1.4].map((z) => (
+                <mesh
+                  key={`${x}-${z}`}
+                  position={[x, -0.32, z]}
+                  rotation={[0, 0, Math.PI / 2]}
+                  raycast={() => undefined}
+                >
+                  <cylinderGeometry args={[0.32, 0.32, 0.22, 16]} />
+                  <meshStandardMaterial color="#26313c" />
+                </mesh>
+              )),
+            )}
+            {bodies.length > 1 && (
+              <Html position={[w / 2 + 0.55, h + 0.2, 0]} center>
+                <span className="road-label">COMPARTIMENTO {index + 1}</span>
+              </Html>
+            )}
+          </group>
+        );
+      })}
+      {v.secondBody && (
         <Box
-          size={[w, 0.015, l]}
-          position={[0, h, 0]}
-          color="#88bbcb"
-          opacity={opacity}
+          size={[0.3, 0.15, couplingGap(v) / 1000]}
+          position={[0, -0.2, (v.length - v.secondBody.length) / 2000]}
+          color="#486171"
         />
       )}
       <Box
-        size={[w, h, 0.015]}
-        position={[0, h / 2, -l / 2]}
-        color="#88bbcb"
-        opacity={opacity}
-      />
-      <Box
-        size={[w, h, 0.015]}
-        position={[0, h / 2, l / 2]}
-        color="#88bbcb"
-        opacity={opacity}
-      />
-      <Box
-        size={[w * 0.93, 1.65, 1.65]}
-        position={[0, 0.6, -l / 2 - 1.25]}
+        size={[firstWidth * 0.93, 1.65, 1.65]}
+        position={[0, 0.6, -length / 2 - 1.25]}
         color="#176a90"
       />
       <Box
-        size={[w * 0.78, 0.55, 0.03]}
-        position={[0, 1.05, -l / 2 - 2.09]}
+        size={[firstWidth * 0.78, 0.55, 0.03]}
+        position={[0, 1.05, -length / 2 - 2.09]}
         color="#15344a"
       />
-      {[-w / 2, w / 2].map((x) =>
-        [-l / 2 - 1.4, l / 2 - 1, l / 2 - 2].map((z) => (
-          <mesh
-            key={`${x}-${z}`}
-            position={[x, -0.32, z]}
-            rotation={[0, 0, Math.PI / 2]}
-            raycast={() => undefined}
-          >
-            <cylinderGeometry args={[0.32, 0.32, 0.22, 16]} />
-            <meshStandardMaterial color="#26313c" />
-          </mesh>
-        )),
-      )}
-      <Html position={[0, 2.05, -l / 2 - 1.2]} center>
+      {[-firstWidth / 2, firstWidth / 2].map((x) => (
+        <mesh
+          key={x}
+          position={[x, -0.32, -length / 2 - 1.4]}
+          rotation={[0, 0, Math.PI / 2]}
+          raycast={() => undefined}
+        >
+          <cylinderGeometry args={[0.32, 0.32, 0.22, 16]} />
+          <meshStandardMaterial color="#26313c" />
+        </mesh>
+      ))}
+      <Html position={[0, 2.05, -length / 2 - 1.2]} center>
         <span className="road-label front-label">FRENTE</span>
       </Html>
-      <Html position={[0, 0, l / 2 + 0.4]} center>
+      <Html position={[0, 0, length / 2 + 0.4]} center>
         <span className="road-label">TRASEIRA</span>
       </Html>
     </group>
@@ -143,6 +179,7 @@ function UnitMesh({
   invalid,
   onSelect,
   offset = [0, 0, 0],
+  worldOffset = 0,
 }: {
   unit: RoadUnit;
   index: number;
@@ -150,6 +187,7 @@ function UnitMesh({
   invalid: boolean;
   onSelect: Props["onSelect"];
   offset?: number[];
+  worldOffset?: number;
 }) {
   const d = footprint(unit),
     w = d.width / 1000,
@@ -165,7 +203,7 @@ function UnitMesh({
       position={[
         unit.x / 1000 - offset[0],
         (unit.z + d.height / 2) / 1000 - offset[1],
-        unit.y / 1000 - offset[2],
+        (unit.y + worldOffset) / 1000 - offset[2],
       ]}
       onClick={(e) => {
         e.stopPropagation();
@@ -225,8 +263,16 @@ function CameraRig({ view, length }: { view: RoadCamera; length: number }) {
       distance = Math.max(7, l * 1.1);
     const poses: Record<RoadCamera, [number, number, number]> = {
       perspective: [distance * 0.8, distance * 0.65, distance * 0.85],
-      top: [0, (l + 3) / (2 * Math.tan(Math.PI / 8)) * 1.15 + 1, -0.999],
-      side: [Math.max(distance * 1.2, (l + 3) / (2 * Math.tan(Math.PI / 8) * size.width / size.height) * 1.15), 1.3, -1],
+      top: [0, ((l + 3) / (2 * Math.tan(Math.PI / 8))) * 1.15 + 1, -0.999],
+      side: [
+        Math.max(
+          distance * 1.2,
+          ((l + 3) / ((2 * Math.tan(Math.PI / 8) * size.width) / size.height)) *
+            1.15,
+        ),
+        1.3,
+        -1,
+      ],
       rear: [0, 1.8, distance],
     };
     camera.position.set(...poses[view]);
@@ -255,7 +301,12 @@ function SceneContent(props: Props) {
     (u) => selected.includes(u.id) && !u.locked,
   );
   const pivot: [number, number, number] = moving.length
-    ? [moving[0].x / 1000, moving[0].z / 1000, moving[0].y / 1000]
+    ? [
+        moving[0].x / 1000,
+        moving[0].z / 1000,
+        (moving[0].y + bodyOffset(state.vehicle, moving[0].compartment ?? 0)) /
+          1000,
+      ]
     : [0, 0, 0];
   const live = dragUnits ?? state.units,
     result = validateRoad({ ...state, units: live });
@@ -283,7 +334,7 @@ function SceneContent(props: Props) {
       selectionGroup.current.position.set(
         first.x / 1000,
         first.z / 1000,
-        first.y / 1000,
+        (first.y + bodyOffset(state.vehicle, first.compartment ?? 0)) / 1000,
       );
     const validation = validateRoad({ ...state, units: next });
     onDragMessage(
@@ -309,6 +360,7 @@ function SceneContent(props: Props) {
           <UnitMesh
             key={u.id}
             unit={u}
+            worldOffset={bodyOffset(state.vehicle, u.compartment ?? 0)}
             index={state.units.indexOf(u)}
             selected={selected.includes(u.id)}
             invalid={result.invalidIds.has(u.id)}
@@ -322,6 +374,7 @@ function SceneContent(props: Props) {
               <UnitMesh
                 key={u.id}
                 unit={u}
+                worldOffset={bodyOffset(state.vehicle, u.compartment ?? 0)}
                 index={state.units.indexOf(u)}
                 selected
                 invalid={result.invalidIds.has(u.id)}
@@ -349,7 +402,7 @@ function SceneContent(props: Props) {
         cellColor="#c5d5de"
         sectionColor="#9eb5c3"
       />
-      <CameraRig view={props.camera} length={state.vehicle.length} />
+      <CameraRig view={props.camera} length={sceneLength(state.vehicle)} />
     </>
   );
 }
