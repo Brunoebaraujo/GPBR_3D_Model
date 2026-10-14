@@ -243,7 +243,7 @@ try {
   test('Door checks allow unit-wise entry and distinguish sider side access', () => {
     const low={...truck.vehicle,rearHeight:1000,rearWidth:2500};
     assert.equal(validateRoad({...truck,vehicle:low,units:[base]}).valid,false);
-    assert.equal(validateRoad({...truck,vehicle:{...low,kind:'sider',sideHeight:2700},units:[base]}).valid,true);
+    assert.equal(validateRoad({...truck,vehicle:{...low,kind:'sider',loading:'side-rear',sideHeight:2700},units:[base]}).valid,true);
   });
   test('Weight split and occupancy use external dimensions and only floor units', () => {
     const state={...truck,units:[base,{...base,id:'top',z:1076}]},r=validateRoad(state);
@@ -262,6 +262,80 @@ try {
     assert.equal(validateRoad({...truck,vehicle:{...truck.vehicle,width:0}}).valid,false);
     assert.equal(validateRoad({...truck,units:[{...base,cargoKg:NaN}]}).valid,false);
     assert.equal(validateRoad({...truck,units:[base,{...base}]}).valid,false);
+  });
+  const { findRoadBatch, ROAD_REFERENCES, dimensionsReady, bodyOffset, sceneLength, stackIds } = await load('utils/roadLoading.js');
+  test('All nine vehicle profiles preserve reference ranges without inventing dimensions or payload', () => {
+    assert.equal(Object.keys(ROAD_PRESETS).length,9);
+    assert.equal(ROAD_REFERENCES.vuc.payload,'1,5–3 t');
+    assert.equal(ROAD_REFERENCES.rodotrem.width,'2,45–2,50 m');
+    for(const [kind,v] of Object.entries(ROAD_PRESETS)) {
+      assert.equal(v.capacityKg,null);
+      if(!['truck','sider'].includes(kind)) {assert.equal(v.length,0);assert.equal(v.height,0);assert.equal(dimensionsReady(v),false);assert.equal(findRoadBatch({...truck,vehicle:v},base,2),null);}
+    }
+  });
+  test('A pair loads on an empty floor and every later pair stays together', () => {
+    for(const model of ['MB5','MB6']) {
+      let state={...truck,units:[]};
+      for(let i=0;i<3;i++) {
+        const pair=findRoadBatch(state,makeRoadUnit(model,1000,`pair-${i}`),2);
+        assert.equal(pair.length,2);assert.equal(pair[0].z,0);assert.equal(pair[1].z,footprint(pair[0]).height);
+        assert.equal(pair[0].x,pair[1].x);assert.equal(pair[0].y,pair[1].y);
+        state={...state,units:[...state.units,...pair]};assert.equal(validateRoad(state).valid,true);
+      }
+      assert.equal(state.units.length,6);assert.equal(state.units.filter(u=>u.z===0).length,3);
+    }
+  });
+  test('Pair insertion is atomic when weight, height or floor capacity permits only one', () => {
+    for(const vehicle of [{...truck.vehicle,capacityKg:1500},{...truck.vehicle,height:2000}]) {
+      const state={...truck,vehicle};assert.ok(findRoadBatch(state,base,1));assert.equal(findRoadBatch(state,base,2),null);assert.equal(state.units.length,0);
+    }
+    const exact={...truck,vehicle:{...truck.vehicle,width:1140,length:1240,height:2152,capacityKg:2230}};
+    const pair=findRoadBatch(exact,base,2);assert.equal(pair.length,2);
+    assert.equal(findRoadBatch({...exact,units:pair},{...base,id:'next'},2),null);
+    assert.equal(validateRoad({...exact,units:pair}).total,2230);
+  });
+  const dual={...truck,vehicle:{...ROAD_PRESETS.bitrem,length:7000,width:2500,height:2600,secondBody:{length:8000,width:2400,height:2500},capacityKg:38000},units:[]};
+  test('Bitrem and rodotrem use two independently bounded cargo bodies', () => {
+    const a={...base,compartment:0},b={...base,id:'rear',compartment:1};
+    assert.equal(validateRoad({...dual,units:[a,b]}).valid,true);
+    assert.equal(validateRoad({...dual,units:[a,{...b,compartment:0}]}).valid,false);
+    assert.equal(validateRoad({...dual,units:[{...b,x:700}]}).valid,false);
+    assert.equal(validateRoad({...dual,units:[{...b,compartment:2}]}).valid,false);
+    assert.equal(validateRoad({...dual,vehicle:{...dual.vehicle,secondBody:undefined},units:[b]}).valid,false);
+  });
+  test('Stacks cannot use a support in the other compartment', () => {
+    assert.equal(validateRoad({...dual,units:[{...base,compartment:0},{...base,id:'top',compartment:1,z:1076}]}).valid,false);
+    assert.equal(validateRoad({...dual,units:[{...base,compartment:1},{...base,id:'top',compartment:1,z:1076}]}).valid,true);
+  });
+  test('Pair insertion targets the selected compartment and includes both compartments in weight', () => {
+    const first=findRoadBatch(dual,{...base,compartment:0},2);
+    const next=findRoadBatch({...dual,units:first},{...base,id:'second',compartment:1},2);
+    assert.equal(next.length,2);assert.ok(next.every(u=>u.compartment===1));
+    const state={...dual,units:[...first,...next]};assert.equal(validateRoad(state).total,4460);
+    assert.equal(findRoadBatch({...state,vehicle:{...state.vehicle,capacityKg:5000}},{...base,id:'third',compartment:1},2),null);
+  });
+  test('Coupling gap never becomes usable cargo floor and camera offsets preserve separation', () => {
+    const v=dual.vehicle;
+    assert.equal(sceneLength(v),16800);
+    assert.equal(bodyOffset(v,0)+v.length/2, -900+(v.length-v.secondBody.length)/2);
+    assert.equal((bodyOffset(v,1)-v.secondBody.length/2)-(bodyOffset(v,0)+v.length/2),1800);
+    const r=validateRoad({...dual,units:[base]});assert.equal(r.floorPercent,1120*1220/(7000*2500+8000*2400)*100);
+    assert.equal(sceneLength({...v,kind:'rodotrem'}),18000);
+  });
+  test('Selecting a stack never captures a unit in another body and group translation keeps support', () => {
+    const pair=findRoadBatch(dual,{...base,compartment:1},2);
+    const state={...dual,units:[...pair,{...pair[0],id:'other-body',compartment:0,y:0}]};
+    const ids=stackIds(state.units,pair[1]);assert.deepEqual(ids,pair.map(u=>u.id));
+    const moved=moveRoadUnits(state,ids,{x:0,y:200,z:0},false);
+    assert.equal(validateRoad({...state,units:moved}).valid,true);
+    assert.equal(moved[2].y,0);
+  });
+  test('A preassembled pair must pass the known opening at its full height', () => {
+    const state={...truck,vehicle:{...truck.vehicle,rearHeight:2000,rearWidth:2500}};
+    assert.ok(findRoadBatch(state,base,1));assert.equal(findRoadBatch(state,base,2),null);
+    const side={...state,vehicle:{...state.vehicle,loading:'side-rear',sideHeight:2200}};
+    const pair=findRoadBatch(side,base,2);assert.equal(pair.length,2);
+    assert.equal(validateRoad({...side,units:pair,vehicle:{...side.vehicle,sideHeight:2000}}).valid,false);
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }

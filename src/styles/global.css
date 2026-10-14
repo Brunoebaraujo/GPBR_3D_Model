@@ -529,3 +529,8 @@ button:disabled { opacity:.45; cursor:not-allowed; }
 @media(max-width:680px) { .app-navigation { flex-direction:column; padding:12px; }.road-workspace { display:flex; flex-direction:column; }.road-panel { max-height:none; }.road-stage { height:700px; order:-1; min-height:0; }.road-properties { display:flex; }.road-fields { grid-template-columns:1fr 1fr; } }
 
 @media(min-width: 1101px) { .app-shell { height:calc(100dvh - 68px); } }
+.road-reference { display:flex; flex-direction:column; gap:5px; background:#edf6fa; padding:12px; border-radius:7px; font-size:12px; line-height:1.5; color:#365c70; }
+.road-reference small { font-size:10px; color:#607986; }
+.road-setup-empty { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:45px; color:#466678; }
+.road-setup-empty strong { letter-spacing:.1em; color:#148a76; }
+.road-setup-empty p { max-width:430px; font-size:14px; line-height:1.6; }

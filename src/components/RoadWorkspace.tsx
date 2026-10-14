@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { GOODPACK_MODELS, type GoodpackModel } from "../data/skus";
 import {
-  findRoadPosition,
+  findRoadBatch,
+  bodyOf,
+  dimensionsReady,
+  hasSideAccess,
+  ROAD_REFERENCES,
+  sameBody,
+  stackIds,
+  type CargoBody,
   footprint,
   makeRoadUnit,
   moveRoadUnits,
@@ -19,7 +26,8 @@ const initial: RoadState = {
   units: [],
   gap: 10,
 };
-const meters = (n: number) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(n / 1000);
+const meters = (n: number) =>
+  new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(n / 1000);
 const number = (n: number) =>
   new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
 function NumberField({
@@ -74,6 +82,13 @@ export function RoadWorkspace() {
   const [selected, setSelected] = useState<string[]>([]);
   const [model, setModel] = useState<GoodpackModel>("MB5");
   const [cargo, setCargo] = useState(1000);
+  const [batchSize, setBatchSize] = useState<1 | 2>(1);
+  const [selectStacks, setSelectStacks] = useState(true);
+  const [bodyIndex, setBodyIndex] = useState(0);
+  const activeCompartment = vehicle.secondBody ? bodyIndex : 0;
+  const activeBody = bodyOf(vehicle, activeCompartment)!;
+  const reference = ROAD_REFERENCES[vehicle.kind];
+  const ready = dimensionsReady(vehicle);
   const [camera, setCamera] = useState<RoadCamera>("perspective");
   const [opacity, setOpacity] = useState(0.12);
   const [roof, setRoof] = useState(true),
@@ -85,6 +100,9 @@ export function RoadWorkspace() {
   const result = validateRoad(state);
   const chosen = units.filter((u) => selected.includes(u.id));
   const unit = chosen.length === 1 ? chosen[0] : null;
+  const anchor = chosen[0];
+  const selectionBody = bodyOf(vehicle, anchor?.compartment ?? 0) ?? vehicle;
+  const mixedBodies = chosen.some((u) => !sameBody(u, chosen[0]));
   const commit = (next: RoadState) => {
     setHistory((h) => [...h.slice(0, cursor + 1), next].slice(-60));
     setCursor(Math.min(cursor + 1, 59));
@@ -99,42 +117,60 @@ export function RoadWorkspace() {
     setMessage("Configuração atualizada.");
     return true;
   };
-  const select = (id: string, multiple: boolean) =>
+  const select = (id: string, multiple: boolean) => {
+    const item = units.find((u) => u.id === id);
+    if (!item) return;
+    setBodyIndex(item.compartment ?? 0);
+    const ids = selectStacks ? stackIds(units, item) : [id];
     setSelected((current) =>
       multiple
-        ? current.includes(id)
-          ? current.filter((x) => x !== id)
-          : [...current, id]
-        : [id],
+        ? ids.every((x) => current.includes(x))
+          ? current.filter((x) => !ids.includes(x))
+          : [...new Set([...current, ...ids])]
+        : ids,
     );
+  };
   const changeVehicle = (patch: Partial<RoadVehicle>) =>
     commit({ ...state, vehicle: { ...vehicle, ...patch } });
+  const changeBody = (patch: Partial<CargoBody>) =>
+    activeCompartment === 0
+      ? changeVehicle({ ...patch, confirmed: false })
+      : changeVehicle({
+          secondBody: { ...activeBody, ...patch },
+          confirmed: false,
+        });
   const add = (source?: RoadUnit) => {
     const template = source
       ? { ...source, id: crypto.randomUUID(), locked: false }
-      : makeRoadUnit(model, cargo, crypto.randomUUID());
-    const position = findRoadPosition(state, template);
-    if (!position) {
+      : {
+          ...makeRoadUnit(model, cargo, crypto.randomUUID()),
+          compartment: activeCompartment,
+        };
+    const count = source ? 1 : batchSize;
+    const batch = findRoadBatch(state, template, count);
+    if (!batch) {
       setMessage(
-        "Não foi encontrada posição válida. Confira espaço, peso, folgas e erros do cenário.",
+        count === 2
+          ? "Pilha não incluída: as duas unidades precisam caber juntas. Confira altura, abertura de entrada, peso total, folgas e medidas do compartimento."
+          : "Não foi encontrada posição válida. Confira espaço, peso, folgas e erros do cenário.",
       );
       return;
     }
-    if (accept([...units, position])) setSelected([position.id]);
+    if (accept([...units, ...batch])) setSelected(batch.map((u) => u.id));
   };
   const translate = (axis: "x" | "y" | "z", value: number) => {
-    if (!unit) return;
+    if (!anchor || mixedBodies) return;
     accept(
       moveRoadUnits(
         state,
         selected,
-        { x: 0, y: 0, z: 0, [axis]: value - unit[axis] },
+        { x: 0, y: 0, z: 0, [axis]: value - anchor[axis] },
         false,
       ),
     );
   };
   const rotate = () => {
-    if (!chosen.length) return;
+    if (!chosen.length || mixedBodies) return;
     const cx = chosen.reduce((s, u) => s + u.x, 0) / chosen.length,
       cy = chosen.reduce((s, u) => s + u.y, 0) / chosen.length;
     accept(
@@ -156,12 +192,14 @@ export function RoadWorkspace() {
       ...unit,
       id: crypto.randomUUID(),
       z: footprint(unit).height,
+      entryLevels: 1 as const,
       locked: false,
     };
-    if (accept([...units, next])) setSelected([next.id]);
+    if (accept([...units, next]))
+      setSelected(selectStacks ? [unit.id, next.id] : [next.id]);
   };
   const duplicateGroup = () => {
-    if (!chosen.length) return;
+    if (!chosen.length || mixedBodies) return;
     const front = Math.min(...chosen.map((u) => roadBounds(u).front)),
       back = Math.max(...chosen.map((u) => roadBounds(u).back));
     const copies = chosen.map((u) => ({
@@ -196,40 +234,111 @@ export function RoadWorkspace() {
               value={vehicle.kind}
               onChange={(e) => {
                 const kind = e.target.value as RoadVehicle["kind"];
-                commit({ ...state, vehicle: { ...ROAD_PRESETS[kind] } });
+                commit({
+                  ...state,
+                  vehicle: {
+                    ...ROAD_PRESETS[kind],
+                    ...(ROAD_PRESETS[kind].secondBody
+                      ? { secondBody: { ...ROAD_PRESETS[kind].secondBody! } }
+                      : {}),
+                  },
+                });
+                setBodyIndex(0);
+                setSelected([]);
                 setMessage(
                   "Perfil alterado. Revise a carga existente e confirme as medidas.",
                 );
               }}
             >
-              <option value="truck">Truck baú</option>
-              <option value="sider">Carreta sider</option>
+              {Object.values(ROAD_PRESETS).map((profile) => (
+                <option key={profile.kind} value={profile.kind}>
+                  {profile.name}
+                </option>
+              ))}
             </select>
           </label>
+          <div className="road-reference">
+            <strong>Referência da sua tabela</strong>
+            <span>Carga útil aprox.: {reference.payload}</span>
+            <span>Largura interna aprox.: {reference.width}</span>
+            <span>Carregamento: {reference.loading}</span>
+            <small>
+              Faixas informativas; não substituem as medidas e capacidade do
+              equipamento real.
+            </small>
+          </div>
+          {vehicle.secondBody && (
+            <label>
+              Compartimento para configurar e carregar
+              <select
+                aria-label="Compartimento"
+                value={activeCompartment}
+                onChange={(e) => {
+                  setBodyIndex(Number(e.target.value));
+                  setSelected([]);
+                }}
+              >
+                <option value={0}>1 · Dianteiro</option>
+                <option value={1}>2 · Traseiro</option>
+              </select>
+            </label>
+          )}
+          <label>
+            Carroceria / acesso
+            <select
+              aria-label="Carroceria / acesso"
+              value={hasSideAccess(vehicle) ? "side-rear" : "rear"}
+              disabled={
+                vehicle.kind === "vuc" ||
+                vehicle.kind === "three-quarter" ||
+                vehicle.kind === "sider"
+              }
+              onChange={(e) =>
+                changeVehicle({
+                  loading: e.target.value as RoadVehicle["loading"],
+                })
+              }
+            >
+              <option value="rear">Baú · traseiro</option>
+              <option value="side-rear">Sider · lateral e traseiro</option>
+            </select>
+          </label>
+          <p className="muted">
+            {vehicle.secondBody
+              ? `Medidas do compartimento ${activeCompartment + 1}. Configure os dois antes de carregar.`
+              : "Dimensões úteis reais. Comprimento e altura não constam na tabela enviada."}
+          </p>
           <div className="road-fields">
             <NumberField
               label="Comprimento útil (mm)"
-              value={vehicle.length}
+              value={activeBody.length || null}
+              optional
               min={500}
               max={30000}
-              onChange={(n) => changeVehicle({ length: n!, confirmed: false })}
+              onChange={(n) => changeBody({ length: n ?? 0 })}
             />
             <NumberField
               label="Largura útil (mm)"
-              value={vehicle.width}
+              value={activeBody.width || null}
+              optional
               min={500}
               max={5000}
-              onChange={(n) => changeVehicle({ width: n!, confirmed: false })}
+              onChange={(n) => changeBody({ width: n ?? 0 })}
             />
             <NumberField
               label="Altura útil (mm)"
-              value={vehicle.height}
+              value={activeBody.height || null}
+              optional
               min={500}
               max={5000}
-              onChange={(n) => changeVehicle({ height: n!, confirmed: false })}
+              onChange={(n) => changeBody({ height: n ?? 0 })}
             />
             <NumberField
-              label="Capacidade útil (kg)"
+              label={
+                vehicle.secondBody
+                  ? "Capacidade útil do conjunto (kg)"
+                  : "Capacidade útil (kg)"
+              }
               value={vehicle.capacityKg}
               min={1}
               optional
@@ -260,7 +369,7 @@ export function RoadWorkspace() {
               optional
               onChange={(n) => changeVehicle({ rearWidth: n })}
             />
-            {vehicle.kind === "sider" && (
+            {hasSideAccess(vehicle) && (
               <NumberField
                 label="Altura livre lateral / trilho (mm)"
                 value={vehicle.sideHeight}
@@ -269,23 +378,32 @@ export function RoadWorkspace() {
                 onChange={(n) => changeVehicle({ sideHeight: n })}
               />
             )}
-            <p className="muted">
-              Referência de equipamento específico, não padrão universal.{" "}
-              <a
-                target="_blank"
-                rel="noreferrer"
-                href={
-                  vehicle.kind === "truck"
-                    ? "https://ingencar.com.br/produto/metalfort-bau-para-truck-cod-648/"
-                    : "https://bautaruma.com/112100001"
-                }
-              >
-                Consultar fonte
-              </a>
-            </p>
+            {vehicle.secondBody && (
+              <p className="muted">
+                Informe aqui a menor abertura entre os dois compartimentos. O
+                vão da articulação não é área de carga.
+              </p>
+            )}
+            {(vehicle.kind === "truck" || vehicle.kind === "sider") && (
+              <p className="muted">
+                Medidas iniciais de um equipamento de referência, editáveis.{" "}
+                <a
+                  target="_blank"
+                  rel="noreferrer"
+                  href={
+                    vehicle.kind === "truck"
+                      ? "https://ingencar.com.br/produto/metalfort-bau-para-truck-cod-648/"
+                      : "https://bautaruma.com/112100001"
+                  }
+                >
+                  Consultar fonte dimensional
+                </a>
+              </p>
+            )}
             <p className="muted">
               Pilares e outras intrusões devem ser descontados do espaço útil. A
-              entrada é avaliada por unidade, sem simular manobras.
+              entrada considera a altura da pilha quando adicionada em pares,
+              sem simular manobras.
             </p>
           </details>
         </section>
@@ -317,9 +435,43 @@ export function RoadWorkspace() {
             max={1650}
             onChange={(n) => setCargo(n!)}
           />
-          <button className="primary-button" onClick={() => add()}>
-            + Adicionar {model}
+          <div className="road-toggle" aria-label="Modo de inclusão">
+            <button
+              aria-pressed={batchSize === 1}
+              onClick={() => setBatchSize(1)}
+            >
+              Unidade
+            </button>
+            <button
+              aria-pressed={batchSize === 2}
+              onClick={() => setBatchSize(2)}
+            >
+              Pilha de 2
+            </button>
+          </div>
+          {batchSize === 2 && (
+            <p className="road-reference">
+              Cada clique adiciona duas caixas alinhadas, já empilhadas:{" "}
+              {number(2 * (cargo + GOODPACK_MODELS[model].emptyWeightKg))} kg e{" "}
+              {2 * GOODPACK_MODELS[model].externalDimensions.height} mm de
+              altura. Não precisa preencher o piso.
+            </p>
+          )}
+          <button
+            className="primary-button"
+            disabled={!ready}
+            onClick={() => add()}
+          >
+            {batchSize === 2
+              ? `+ Adicionar pilha de 2 ${model}`
+              : `+ Adicionar ${model}`}
           </button>
+          {!ready && (
+            <p className="road-error">
+              Preencha as dimensões úteis de todos os compartimentos para
+              iniciar.
+            </p>
+          )}
           <NumberField
             label="Folga lateral e entre unidades (mm)"
             value={gap}
@@ -344,7 +496,31 @@ export function RoadWorkspace() {
               Desmarcar
             </button>
           </div>
-          <p className="muted">Shift + clique para selecionar um grupo.</p>
+          <label className="road-check">
+            <input
+              type="checkbox"
+              checked={selectStacks}
+              onChange={(e) => {
+                setSelectStacks(e.target.checked);
+                setSelected([]);
+              }}
+            />
+            Selecionar pilha inteira ao clicar
+          </label>
+          <p className="muted">
+            Shift + clique adiciona ou remove pilhas da seleção. Desmarque a
+            opção para editar só a caixa superior.
+          </p>
+          <button
+            disabled={!units.length}
+            onClick={() => {
+              commit({ ...state, units: [] });
+              setSelected([]);
+              setMessage("Carga removida. Use Desfazer para recuperar.");
+            }}
+          >
+            Limpar toda a carga
+          </button>
           <div className="road-unit-list">
             {units.length === 0 ? (
               <p className="road-empty">O equipamento está vazio.</p>
@@ -369,6 +545,9 @@ export function RoadWorkspace() {
                   <small>
                     {number(u.cargoKg + GOODPACK_MODELS[u.model].emptyWeightKg)}{" "}
                     kg · {u.z === 0 ? "piso" : "2º nível"}
+                    {vehicle.secondBody
+                      ? ` · compart. ${(u.compartment ?? 0) + 1}`
+                      : ""}
                   </small>
                 </button>
               ))
@@ -415,23 +594,44 @@ export function RoadWorkspace() {
           </div>
         </div>
         <div className="road-canvas">
-          <RoadScene
-            state={state}
-            selected={selected}
-            camera={camera}
-            opacity={opacity}
-            roof={roof}
-            sides={sides}
-            snap={snap}
-            onSelect={select}
-            onMove={accept}
-            onDragMessage={setMessage}
-          />
+          {ready ? (
+            <RoadScene
+              state={state}
+              selected={selected}
+              camera={camera}
+              opacity={opacity}
+              roof={roof}
+              sides={sides}
+              snap={snap}
+              onSelect={select}
+              onMove={accept}
+              onDragMessage={setMessage}
+            />
+          ) : (
+            <div className="road-setup-empty">
+              <strong>{vehicle.name}</strong>
+              <h2>Configure o espaço útil</h2>
+              <p>
+                Informe comprimento, largura e altura{" "}
+                {vehicle.secondBody
+                  ? "dos dois compartimentos"
+                  : "do equipamento"}{" "}
+                no painel à esquerda.
+              </p>
+              <p>
+                A tabela fornece faixas de referência, mas não determina essas
+                medidas.
+              </p>
+            </div>
+          )}
           <div className="road-scene-badge">
             {vehicle.name}
             <span>
-              {meters(vehicle.length)} × {meters(vehicle.width)} ×{" "}
-              {meters(vehicle.height)} m úteis
+              {ready
+                ? vehicle.secondBody
+                  ? `2 compartimentos · ${meters(vehicle.length)} m + ${meters(vehicle.secondBody.length)} m úteis`
+                  : `${meters(vehicle.length)} × ${meters(vehicle.width)} × ${meters(vehicle.height)} m úteis`
+                : "Dimensões pendentes"}
             </span>
           </div>
         </div>
@@ -533,58 +733,73 @@ export function RoadWorkspace() {
             Use as setas do controle 3D para mover e o quadrado do plano para
             arrastar no piso. Giro sempre em pé.
           </p>
-          {unit && (
+          {anchor && !mixedBodies && (
             <>
               <div className="road-fields">
                 <NumberField
                   label="Lateral X (mm)"
-                  value={unit.x}
+                  value={anchor.x}
                   min={-30000}
                   onChange={(n) => translate("x", n!)}
                 />
                 <NumberField
                   label="Longitudinal Y (mm)"
-                  value={unit.y}
+                  value={anchor.y}
                   min={-30000}
                   onChange={(n) => translate("y", n!)}
                 />
                 <NumberField
                   label="Base Z (mm)"
-                  value={unit.z}
+                  value={anchor.z}
                   onChange={(n) => translate("z", n!)}
                 />
-                <NumberField
-                  label="Produto (kg)"
-                  value={unit.cargoKg}
-                  max={1650}
-                  onChange={(n) => {
-                    if (!unit.locked)
-                      accept(
-                        units.map((u) =>
-                          u.id === unit.id ? { ...u, cargoKg: n! } : u,
-                        ),
-                      );
-                  }}
-                />
+                {unit && (
+                  <NumberField
+                    label="Produto (kg)"
+                    value={unit.cargoKg}
+                    max={1650}
+                    onChange={(n) => {
+                      if (!unit.locked)
+                        accept(
+                          units.map((u) =>
+                            u.id === unit.id ? { ...u, cargoKg: n! } : u,
+                          ),
+                        );
+                    }}
+                  />
+                )}
               </div>
               <p className="muted">
-                Origem no centro do piso. Y negativo aponta para a cabine.
+                Origem no centro do piso do compartimento. Y negativo aponta
+                para a cabine. Em grupos, coordenadas da primeira unidade; todas
+                se movem juntas.
               </p>
               {selectedClearance && (
                 <div className="road-clearance">
                   Folgas até as paredes: esquerda{" "}
-                  {number(selectedClearance.left + vehicle.width / 2)} · direita{" "}
-                  {number(vehicle.width / 2 - selectedClearance.right)} · frente{" "}
-                  {number(selectedClearance.front + vehicle.length / 2)} ·
-                  traseira {number(vehicle.length / 2 - selectedClearance.back)}{" "}
-                  · teto {number(vehicle.height - selectedClearance.top)} mm
+                  {number(selectedClearance.left + selectionBody.width / 2)} ·
+                  direita{" "}
+                  {number(selectionBody.width / 2 - selectedClearance.right)} ·
+                  frente{" "}
+                  {number(selectedClearance.front + selectionBody.length / 2)} ·
+                  traseira{" "}
+                  {number(selectionBody.length / 2 - selectedClearance.back)} ·
+                  teto {number(selectionBody.height - selectedClearance.top)} mm
                 </div>
               )}
             </>
           )}
+          {mixedBodies && (
+            <p className="road-notice">
+              Para girar ou duplicar, selecione unidades de um único
+              compartimento.
+            </p>
+          )}
           <div className="road-action-grid">
             <button
-              disabled={!chosen.length || chosen.some((u) => u.locked)}
+              disabled={
+                !chosen.length || mixedBodies || chosen.some((u) => u.locked)
+              }
               onClick={rotate}
             >
               Girar 90°
@@ -595,7 +810,10 @@ export function RoadWorkspace() {
             <button disabled={!unit || unit.z !== 0} onClick={stack}>
               Empilhar cópia
             </button>
-            <button disabled={!chosen.length} onClick={duplicateGroup}>
+            <button
+              disabled={!chosen.length || mixedBodies}
+              onClick={duplicateGroup}
+            >
               Duplicar fileira / grupo
             </button>
             <button
@@ -623,8 +841,9 @@ export function RoadWorkspace() {
             </button>
           </div>
           <p className="muted">
-            Para mover uma pilha, selecione a base e a unidade de cima. Para
-            retirar a base, retire primeiro a unidade superior.
+            Com a seleção de pilha ativa, mova, gire ou exclua as duas caixas
+            juntas. Para retirar somente a base, retire primeiro a unidade
+            superior.
           </p>
         </section>
         <section
