@@ -1,7 +1,9 @@
 import type { PackingObjectType, PackingObject } from '../types';
-import { MB5_CONTAINER } from '../data/skus';
+import { GOODPACK_MODELS, type GoodpackModel } from '../data/skus';
 
 interface SidebarProps {
+  model: GoodpackModel;
+  onModelChange: (model: GoodpackModel) => void;
   onCreateProduct: () => void;
   onEditProduct?: () => void;
   objects: PackingObject[];
@@ -10,12 +12,14 @@ interface SidebarProps {
   onAddObject: (type: PackingObjectType) => void;
 }
 
-export function Sidebar({ onAddObject, onCreateProduct, onEditProduct, objects, selectedObjectId, onSelectObject }: SidebarProps) {
+export function Sidebar({ model, onModelChange, onAddObject, onCreateProduct, onEditProduct, objects, selectedObjectId, onSelectObject }: SidebarProps) {
+  const container = GOODPACK_MODELS[model];
   return (
     <aside className="panel sidebar">
       <div>
         <p className="eyebrow">Goodpack</p>
-        <h1>Goodpack MB5</h1>
+        <h1>{container.name}</h1>
+        <label>Modelo<select aria-label="Modelo" value={model} onChange={e => onModelChange(e.target.value as GoodpackModel)}><option>MB5</option><option>MB6</option></select></label>
       </div>
 
       <div className="section"><h2>Produto do cliente</h2><button className="primary-button" onClick={onCreateProduct}>+ Criar produto</button><button disabled={!onEditProduct} onClick={onEditProduct}>Editar produto selecionado</button><div className="product-list">{objects.map(object => <button key={object.id} aria-pressed={object.id === selectedObjectId} onClick={() => onSelectObject(object.id)}>{object.name}</button>)}</div></div>
@@ -23,24 +27,24 @@ export function Sidebar({ onAddObject, onCreateProduct, onEditProduct, objects, 
         <div>
           <dt>Dimensões externas</dt>
           <dd>
-            {MB5_CONTAINER.externalDimensions.width} x {MB5_CONTAINER.externalDimensions.depth} x{' '}
-            {MB5_CONTAINER.externalDimensions.height} mm
+            {container.externalDimensions.width} x {container.externalDimensions.depth} x{' '}
+            {container.externalDimensions.height} mm
           </dd>
         </div>
         <div>
           <dt>Volume útil</dt>
           <dd>
-            {MB5_CONTAINER.internalDimensions.width} x {MB5_CONTAINER.internalDimensions.depth} x{' '}
-            {MB5_CONTAINER.internalDimensions.height} mm
+            {container.internalDimensions.width} x {container.internalDimensions.depth} x{' '}
+            {container.internalDimensions.height} mm
           </dd>
         </div>
         <div>
           <dt>Carga máxima</dt>
-          <dd>{MB5_CONTAINER.maxPayloadKg} kg</dd>
+          <dd>{container.maxPayloadKg} kg</dd>
         </div>
         <div>
           <dt>Tara</dt>
-          <dd>{MB5_CONTAINER.emptyWeightKg} kg</dd>
+          <dd>{container.emptyWeightKg} kg</dd>
         </div>
       </dl>
 

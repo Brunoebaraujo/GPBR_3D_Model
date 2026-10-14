@@ -1,13 +1,17 @@
 import { Canvas } from '@react-three/fiber';
 import { Bounds, Grid, OrbitControls, PerspectiveCamera, TransformControls } from '@react-three/drei';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { Group } from 'three';
+import type { TransformControls as TransformControlsImpl } from 'three-stdlib';
 import type { PackingObject, TransformMode, TopFace } from '../types';
-import { MB5Container } from './MB5Container';
+import { GoodpackContainer } from './GoodpackContainer';
+import { MB5_CONTAINER } from '../data/skus';
+import type { ContainerSpec } from '../types';
 import { PackingObject as PackingObjectMesh } from './PackingObject';
 import { threePositionToPacking, threeRotationToPackingDegrees } from '../utils/unitConversion';
 
 interface Scene3DProps {
+  container?: ContainerSpec;
   objects: PackingObject[];
   studio?: boolean;
   onPickTop?: (face: TopFace) => void;
@@ -19,6 +23,7 @@ interface Scene3DProps {
 
 export function Scene3D({
   objects,
+  container = MB5_CONTAINER,
   studio = false,
   onPickTop,
   selectedObjectId,
@@ -28,7 +33,7 @@ export function Scene3D({
 }: Scene3DProps) {
   const objectRefs = useRef<Record<string, Group | null>>({});
   const objectRefCallbacks = useRef<Record<string, (group: Group | null) => void>>({});
-  const transformControlsRef = useRef<any>(null);
+  const transformControlsRef = useRef<TransformControlsImpl>(null);
   const selectedObjectRef = useRef<PackingObject | null>(null);
   const [isTransformDragging, setIsTransformDragging] = useState(false);
   const [, setRefsVersion] = useState(0);
@@ -53,28 +58,6 @@ export function Scene3D({
     });
   }, [onUpdateObject]);
 
-  useEffect(() => {
-    const controls = transformControlsRef.current;
-
-    if (!controls) {
-      return;
-    }
-
-    const handleDraggingChanged = (event: { value: boolean }) => {
-      if (!event.value) {
-        commitSelectedTransform();
-      }
-
-      setIsTransformDragging(event.value);
-    };
-
-    controls.addEventListener('dragging-changed', handleDraggingChanged);
-
-    return () => {
-      controls.removeEventListener('dragging-changed', handleDraggingChanged);
-    };
-  }, [commitSelectedTransform, selectedGroup]);
-
   const getObjectRef = useCallback((id: string) => {
     if (!objectRefCallbacks.current[id]) {
       objectRefCallbacks.current[id] = (group: Group | null) => {
@@ -97,7 +80,7 @@ export function Scene3D({
         <color attach="background" args={['#eef2f5']} />
         <ambientLight intensity={0.75} />
         <directionalLight position={[3, 5, 4]} intensity={1.3} castShadow />
-        {!studio && <MB5Container />}
+        {!studio && <GoodpackContainer container={container} />}
         <Bounds fit={studio} clip={studio} observe={studio} margin={1.6}>
         {objects.map((object) => (
           <PackingObjectMesh
@@ -116,6 +99,8 @@ export function Scene3D({
             ref={transformControlsRef}
             object={selectedGroup}
             mode={transformMode}
+            onMouseDown={() => setIsTransformDragging(true)}
+            onMouseUp={() => { commitSelectedTransform(); setIsTransformDragging(false); }}
           />
         ) : null}
         <Grid

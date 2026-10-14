@@ -159,3 +159,67 @@ Each generated piece carries its own rotation. Principal pieces retain their pro
 **Manter topo para cima** remains authoritative: turning a box on its side is permitted only if the selected top can remain upward or that restriction is disabled. Stability, bearing surfaces, stack strength and handling sequence remain outside the geometric model.
 
 Regression coverage includes a 400 × 300 × 220 mm / 1 kg MB5 example (32 uniform versus 47 combined), clearance between residual batches, every selectable top, payload allocation, large previews, cylinder fallback, mode switching and deterministic varied dimensions/rotations.
+
+## MB6 e planejamento rodoviário
+
+A navegação separa **Produto no Goodpack** de **Goodpack no caminhão**. O primeiro
+ambiente aceita MB5 e MB6 e recalcula o nesting com as dimensões internas do modelo.
+O ambiente rodoviário usa as dimensões externas e soma a tara ao peso do produto.
+
+| Modelo | Externo C × L × A (mm) | Interno C × L × A (mm) | Tara nominal | Carga útil |
+| --- | --- | --- | --- | --- |
+| MB5 | 1465 × 1150 × 1098 | 1437 × 1090 × 1020 | 132 kg | 1650 kg |
+| MB6 | 1220 × 1120 × 1076 | 1187 × 1069 × 981 | 115 kg, incluindo tampa | 1650 kg |
+
+Fontes: fichas Goodpack GP TDS MB5 (02/05/2021) e GP TDS MB6 (27/02/2023),
+fornecidas pelo proprietário do projeto. As taras de catálogo têm tolerâncias de
+±4 kg e ±3 kg, respectivamente; o cálculo usa os valores nominais.
+
+### Perfis rodoviários de referência
+
+- **Truck baú:** 8280 × 2500 × 2600 mm úteis. Referência:
+  [Metalfort / Ingencar](https://ingencar.com.br/produto/metalfort-bau-para-truck-cod-648/).
+- **Carreta sider:** 14700 × 2480 × 2760 mm úteis; altura traseira 2690 mm;
+  altura lateral no trilho 2700 mm. Referência:
+  [Facchini / Baú Tarumã](https://bautaruma.com/112100001).
+
+São equipamentos específicos, não dimensões universais. Confirme medidas,
+capacidade útil e aberturas com a transportadora. A capacidade de carga começa
+sem valor e nunca é presumida a partir do tipo de equipamento.
+
+### Operação
+
+1. Escolha o equipamento, revise as medidas úteis e informe a capacidade útil.
+2. Escolha MB5 ou MB6, informe o peso do produto e clique em **Adicionar**.
+3. Selecione a unidade na cena ou lista. Shift/Ctrl + clique seleciona grupos.
+4. Mova pelos eixos ou plano do controle 3D, ou use coordenadas em milímetros.
+   X é lateral, Y é longitudinal (negativo para a cabine), Z é a altura da base.
+5. Gire 90°, duplique unidades/fileiras ou empilhe uma cópia. Para mover uma
+   pilha, selecione os dois níveis. A unidade superior deve ser removida antes
+   de sua base.
+6. Ajuste o raio X, o teto/laterais e as vistas superior, lateral ou traseira.
+   Desfazer/refazer mantém até 60 estados durante a sessão.
+
+O encaixe assistido procura paredes e unidades próximas (80 mm), com grade de
+10 mm fora dessas regiões. Folgas se aplicam ao piso e às laterais entre
+unidades, sem afastar os apoios de uma pilha. Movimentos inválidos ficam vermelhos
+e retornam à posição anterior ao soltar. Unidades travadas não se movem.
+
+### Validação e limites da primeira entrega
+
+- Caixas montadas e carregadas, sempre em pé; giros de 90° no piso.
+- Até dois níveis do mesmo modelo, alinhados e apoiados sobre uma unidade no piso.
+- Colisões, limites externos, folgas, carga útil por caixa e peso total embarcado.
+- Entrada avaliada por unidade. Não simula trajetória, manobra da empilhadeira,
+  entrada de uma pilha inteira, pilares, amarração, resistência do piso ou cargas
+  por eixo. Desconte intrusões das dimensões úteis antes de simular.
+- A divisão frente/traseira assume massa uniforme no envelope de cada unidade;
+  não é um cálculo de reações nos eixos.
+- Limite de 200 unidades para manter a interação responsiva.
+- A troca de equipamento mantém a carga e destaca incompatibilidades. As duas
+  seções preservam seu estado ao alternar abas; recarregar a página reinicia a sessão.
+- Otimização automática completa e salvar/reabrir cenários são etapas posteriores.
+
+`src/utils/roadLoading.ts` concentra as regras geométricas sem dependência da
+interface. `npm test` cobre MB6, tara, limites, folgas, apoio, grupos, aberturas,
+posicionamento assistido e distribuição espacial, além dos testes do nesting.

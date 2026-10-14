@@ -19,7 +19,7 @@ export const validateFit = (objects: PackingObject[], container: ContainerSpec):
   const objectResults = objects.map(object => {
     const bounds = getPackingObjectBounds(object), warnings: string[] = [];
     if (![...Object.values(object.dimensions), ...Object.values(object.position), ...Object.values(object.rotation), object.weightKg].every(Number.isFinite) || Object.values(object.dimensions).some(v => v <= 0) || object.weightKg < 0) warnings.push(`${object.name}: dados inválidos.`);
-    if (bounds.minX < -d.width / 2 - EPSILON || bounds.maxX > d.width / 2 + EPSILON || bounds.minY < -d.depth / 2 - EPSILON || bounds.maxY > d.depth / 2 + EPSILON || bounds.minZ < -EPSILON || bounds.maxZ > d.height + EPSILON) warnings.push(`${object.name}: fora do volume útil do MB5.`);
+    if (bounds.minX < -d.width / 2 - EPSILON || bounds.maxX > d.width / 2 + EPSILON || bounds.minY < -d.depth / 2 - EPSILON || bounds.maxY > d.depth / 2 + EPSILON || bounds.minZ < -EPSILON || bounds.maxZ > d.height + EPSILON) warnings.push(`${object.name}: fora do volume útil de ${container.name}.`);
     if (object.keepTopUp && !isTopUp(object)) warnings.push(`${object.name}: o topo deve permanecer para cima.`);
     return { objectId: object.id, fits: warnings.length === 0, warnings };
   });
@@ -39,7 +39,7 @@ export const validateFit = (objects: PackingObject[], container: ContainerSpec):
   }
   const warnings = objectResults.flatMap(result => result.warnings);
   if (collisions) warnings.push(conservative ? `${collisions} possível(is) sobreposição(ões). Cilindros inclinados ou misturados a blocos usam envelopes conservadores.` : `${collisions} sobreposição(ões) entre produtos.`);
-  if (totalObjectWeightKg > container.maxPayloadKg + EPSILON) warnings.push('Peso total excede a carga máxima do MB5.');
+  if (totalObjectWeightKg > container.maxPayloadKg + EPSILON) warnings.push(`Peso total excede a carga máxima de ${container.name}.`);
   const volumeUtilizationPercent = occupiedVolumeMm3 / internalVolumeMm3 * 100;
   if (volumeUtilizationPercent > 100 + EPSILON) warnings.push('Volume dos produtos excede 100% do volume útil.');
   return { fits: warnings.length === 0, volumeUtilizationPercent, occupiedVolumeMm3, internalVolumeMm3, totalObjectWeightKg, remainingPayloadKg: container.maxPayloadKg - totalObjectWeightKg, objectCount: objects.length, warnings, objectResults };

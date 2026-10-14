@@ -1,6 +1,6 @@
-import { Edges } from '@react-three/drei';
-import { MB5_CONTAINER } from '../data/skus';
-import { mmToThreeUnits } from '../utils/unitConversion';
+import { Edges } from "@react-three/drei";
+import type { ContainerSpec } from "../types";
+import { mmToThreeUnits } from "../utils/unitConversion";
 
 const VolumeWireframe = ({
   dimensions,
@@ -8,7 +8,7 @@ const VolumeWireframe = ({
   opacity,
   yOffset,
 }: {
-  dimensions: typeof MB5_CONTAINER.externalDimensions;
+  dimensions: ContainerSpec["externalDimensions"];
   color: string;
   opacity: number;
   yOffset: number;
@@ -21,22 +21,27 @@ const VolumeWireframe = ({
         mmToThreeUnits(dimensions.depth),
       ]}
     />
-    <meshBasicMaterial color={color} transparent opacity={opacity} depthWrite={false} />
+    <meshBasicMaterial
+      color={color}
+      transparent
+      opacity={opacity}
+      depthWrite={false}
+    />
     <Edges color={color} />
   </mesh>
 );
 
-export function MB5Container() {
+export function GoodpackContainer({ container }: { container: ContainerSpec }) {
   return (
     <group>
       <VolumeWireframe
-        dimensions={MB5_CONTAINER.externalDimensions}
+        dimensions={container.externalDimensions}
         color="#3d4752"
         opacity={0.08}
         yOffset={0}
       />
       <VolumeWireframe
-        dimensions={MB5_CONTAINER.internalDimensions}
+        dimensions={container.internalDimensions}
         color="#00a878"
         opacity={0.06}
         yOffset={0}
