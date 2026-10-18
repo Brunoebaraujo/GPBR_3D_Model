@@ -345,7 +345,7 @@ try {
     return reduceLab(state, { type: 'lid' });
   };
   test('MB6 starts folded and closed; lid guards every wall and premature closing', () => {
-    let s = initialLab(); const original = structuredClone(s);
+    let s = initialLab(); const original = JSON.parse(JSON.stringify(s));
     assert.equal(reduceLab(s, { type: 'wall', index: 0 }).boxes[0].walls[0], false);
     s = reduceLab(s, { type: 'lid' });
     assert.equal(reduceLab(s, { type: 'lock', index: 0 }).boxes[0].locks[0], false);
@@ -399,3 +399,4 @@ try {
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }
+
