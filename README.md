@@ -268,3 +268,43 @@ de um grupo usam a primeira caixa como referência. O modo **Unidade** e o botã
 **Empilhar cópia** continuam disponíveis para montagem individual. Desfazer/refazer
 trata a inclusão de uma pilha como uma única ação. **Limpar toda a carga** também
 pode ser desfeito, facilitando a troca para um perfil ainda sem dimensões.
+# Laboratório MB6 / WebXR
+
+Abra **Montagem MB6 · VR** na navegação, ou acesse `#vr`. A caixa começa dobrada,
+com tampa. Retire a tampa, levante cada parede, trave os quatro vértices e feche.
+Crie a segunda caixa e repita. Selecione a caixa superior, eleve, aproxime,
+ajuste X em −20 mm três vezes e teste o encaixe. O deslocamento inicial de 60 mm
+é intencional para demonstrar a rejeição de alinhamento incorreto. Girar 90°
+também deve falhar; 180° é compatível com a malha retangular de apoios.
+
+No computador, use os botões ou clique nas peças; arraste para orbitar.
+Em navegador com WebXR, contexto seguro HTTPS/localhost e headset compatível,
+**Entrar em VR** solicita uma sessão `immersive-vr` com piso `local-floor`.
+Dentro do headset, todos os comandos estão no painel 3D: aponte um controle
+e aperte o gatilho. Há seleção de caixa, movimentos de 20 mm, reinício e saída.
+O modo desktop permanece disponível sem WebXR. Não há rastreamento de mãos
+ou manipulação livre por agarrar: a interação é por seleção e comandos assistidos.
+
+O estado valida tampa, paredes adjacentes, quatro travas, colisão conservadora
+na posição final e quatro pares pé/vértice. Apenas duas caixas e dois níveis.
+Uma caixa elevada é uma prévia suspensa até confirmar o encaixe; não há gravidade,
+colisão ao longo da trajetória ou cálculo de resistência. A base de uma pilha
+fica bloqueada até desempilhar. Sair da aba VR ou recarregar reinicia o laboratório.
+
+## Proveniência e limites geométricos
+
+- Referência visual consultada: [Goodpack MB6 reusable container — Goodpack Limited](https://www.youtube.com/watch?v=n62GPoPrZzw), incluindo dimensões externas e caixas dobradas empilhadas.
+- Envelope 1120 × 1220 × 1076 mm reutilizado de `src/data/skus.ts`, cuja fonte
+  registrada neste repositório é GP TDS MB6 de 27/02/2023. O PDF original não
+  estava disponível na pasta sincronizada desta sessão e não foi reinspecionado.
+- Paredes, dobradiças, tampa, pinos e cavidades dos pés são representações
+  paramétricas ilustrativas. Recuo de apoios de 55 mm, pé de 70 mm, pino de 25 mm
+  e tolerância didática de 35 mm **não são cotas certificadas do fabricante**.
+  A tolerância aproxima os apoios e então centraliza a caixa; não é uma folga de fabricação.
+- O encaixe é correto para esta geometria virtual. Conferir as cotas reais e
+  a cinemática na ficha/desenho de fabricação antes de usar como treinamento operacional.
+
+Validação: testes automatizados de sequência, independência das caixas, rejeição
+de sobreposição, desalinhamento, giro incompatível, apoio incompleto e proteção
+da base; fluxo desktop exercitado no navegador. Sessão imersiva e ergonomia
+dos controles ainda exigem teste em headset físico.

@@ -1,3 +1,4 @@
+import { VRWorkspace } from './components/VRWorkspace';
 import { RoadWorkspace } from './components/RoadWorkspace';
 import { ProductEditor } from './components/ProductEditor';
 import { getRotatedBoundingBox } from './utils/boundingBox';
@@ -194,6 +195,6 @@ export function ProductWorkspace() {
 }
 
 export default function App() {
-  const [section, setSection] = useState<'product' | 'road'>('product');
-  return <><header className="app-navigation"><strong>GOODPACK <span>LOAD STUDIO</span></strong><nav aria-label="Área de trabalho"><button aria-pressed={section === 'product'} onClick={() => setSection('product')}>Produto no Goodpack</button><button aria-pressed={section === 'road'} onClick={() => setSection('road')}>Goodpack no caminhão</button></nav></header><div hidden={section !== 'product'}><ProductWorkspace /></div><div hidden={section !== 'road'}><RoadWorkspace /></div></>;
+  const [section, setSection] = useState<'product' | 'road' | 'vr'>(window.location.hash === '#vr' ? 'vr' : 'product');
+  return <><header className="app-navigation"><strong>GOODPACK <span>LOAD STUDIO</span></strong><nav aria-label="Área de trabalho"><button aria-pressed={section === 'product'} onClick={() => setSection('product')}>Produto no Goodpack</button><button aria-pressed={section === 'road'} onClick={() => setSection('road')}>Goodpack no caminhão</button><button aria-pressed={section === 'vr'} onClick={() => setSection('vr')}>Montagem MB6 · VR</button></nav></header><div hidden={section !== 'product'}><ProductWorkspace /></div><div hidden={section !== 'road'}><RoadWorkspace /></div>{section === 'vr' && <VRWorkspace />}</>;
 }
