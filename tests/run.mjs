@@ -337,5 +337,102 @@ try {
     const pair=findRoadBatch(side,base,2);assert.equal(pair.length,2);
     assert.equal(validateRoad({...side,units:pair,vehicle:{...side.vehicle,sideHeight:2000}}).valid,false);
   });
+  const { initialLab, reduceLab, ready, fitsStack, MB6, boxHeight, leverGesture } = await load('utils/mb6Assembly.js');
+  const operateLever = (state, index) => ['lift', 'slide', 'lower'].reduce((s, step) => reduceLab(s, { type: 'lever', index, step }), state);
+  const assemble = state => {
+    state = reduceLab(state, { type: 'lid' });
+    for (let i = 0; i < 4; i++) state = reduceLab(state, { type: 'wall', index: i });
+    for (let i = 0; i < 4; i++) state = operateLever(state, i);
+    return reduceLab(state, { type: 'lid' });
+  };
+  test('MB6 starts folded and closed; lid guards every wall and premature closing', () => {
+    let s = initialLab(); const original = JSON.parse(JSON.stringify(s));
+    assert.equal(reduceLab(s, { type: 'wall', index: 0 }).boxes[0].walls[0], false);
+    s = reduceLab(s, { type: 'lid' });
+    assert.equal(operateLever(s, 0).boxes[0].locks[0], false);
+    s = reduceLab(s, { type: 'wall', index: 0 });
+    assert.equal(reduceLab(s, { type: 'lid' }).boxes[0].lid, false);
+    assert.deepEqual(initialLab(), original);
+  });
+  test('MB6 assembles four independent walls and locks; adjacent locks prevent folding', () => {
+    let s = assemble(initialLab()); assert.equal(ready(s.boxes[0]), true);
+    s = reduceLab(s, { type: 'lid' });
+    assert.equal(reduceLab(s, { type: 'wall', index: 0 }).boxes[0].walls[0], true);
+    s = operateLever(s, 0);
+    s = operateLever(s, 3);
+    s = reduceLab(s, { type: 'wall', index: 0 });
+    assert.deepEqual(s.boxes[0].walls, [false, true, true, true]);
+    assert.equal(reduceLab(s, { type: 'lid' }).boxes[0].lid, false);
+  });
+  test('MB6 second box is independent and creation is bounded', () => {
+    let s = assemble(initialLab()); s = reduceLab(s, { type: 'add' });
+    assert.equal(ready(s.boxes[0]), true); assert.equal(ready(s.boxes[1]), false);
+    assert.equal(reduceLab(s, { type: 'add' }).boxes.length, 2);
+    assert.deepEqual(reduceLab(s, { type: 'reset' }), initialLab());
+  });
+  test('MB6 stack requires four matching feet: rejects offsets, heights, 90 degrees and incomplete boxes', () => {
+    const s = assemble(reduceLab(assemble(initialLab()), { type: 'add' }));
+    const base = s.boxes[0], top = { ...s.boxes[1], pose: { ...base.pose, y: MB6.h } };
+    assert.equal(fitsStack(top, base), true);
+    for (const pose of [{ ...top.pose, x: top.pose.x + 0.06 }, { ...top.pose, y: top.pose.y + 0.06 }, { ...top.pose, yaw: Math.PI / 2 }]) assert.equal(fitsStack({ ...top, pose }, base), false);
+    assert.equal(fitsStack({ ...top, pose: { ...top.pose, yaw: Math.PI } }, base), true);
+    assert.equal(fitsStack({ ...top, lid: false }, base), false);
+    assert.equal(fitsStack(top, { ...base, locks: [true, true, false, true] }), false);
+  });
+  test('MB6 endpoint collision rejects overlap; supported base cannot move or open until unstacked', () => {
+    let s = assemble(reduceLab(assemble(initialLab()), { type: 'add' }));
+    const pose = { ...s.boxes[0].pose };
+    assert.equal(reduceLab(s, { type: 'move', pose }).boxes[1].pose.x, 0.8);
+    s = reduceLab(s, { type: 'move', pose: { ...s.boxes[1].pose, y: MB6.h } });
+    s = reduceLab(s, { type: 'move', pose: { ...pose, y: MB6.h } });
+    s = reduceLab(s, { type: 'stack' }); assert.equal(s.boxes[1].support, 1);
+    s = reduceLab(s, { type: 'select', id: 1 });
+    assert.deepEqual(reduceLab(s, { type: 'lid' }).boxes, s.boxes);
+    assert.deepEqual(reduceLab(s, { type: 'move', pose: { ...pose, x: 2 } }).boxes, s.boxes);
+    s = reduceLab(s, { type: 'select', id: 2 });
+    s = reduceLab(s, { type: 'unstack' }); assert.equal(s.boxes[1].support, null);
+    assert.equal(s.boxes[1].pose.y, 0);
+  });
+  test('MB6 invalid coordinates and invalid part indexes leave geometry unchanged', () => {
+    const s = initialLab();
+    for (const pose of [{ x: NaN, y: 0, z: 0, yaw: 0 }, { x: 0, y: -1, z: 0, yaw: 0 }, { x: 4, y: 0, z: 0, yaw: 0 }]) assert.deepEqual(reduceLab(s, { type: 'move', pose }).boxes, s.boxes);
+    assert.deepEqual(reduceLab(s, { type: 'wall', index: 10 }).boxes, s.boxes);
+  });
+  test('MB6 lever needs lift, slide and lower; a raised engaged bolt still restrains both walls', () => {
+    let s = initialLab(); s = reduceLab(s, { type: 'lid' });
+    for (let i = 0; i < 4; i++) s = reduceLab(s, { type: 'wall', index: i });
+    const operate = step => { s = reduceLab(s, { type: 'lever', index: 0, step }); };
+    operate('slide'); assert.equal(s.boxes[0].bolts[0], false);
+    operate('lift'); assert.equal(s.boxes[0].leverRaised[0], true); assert.equal(s.boxes[0].locks[0], false);
+    operate('slide'); assert.equal(s.boxes[0].bolts[0], true); assert.equal(s.boxes[0].locks[0], false);
+    assert.equal(reduceLab(s, { type: 'wall', index: 0 }).boxes[0].walls[0], true);
+    assert.equal(reduceLab(s, { type: 'wall', index: 1 }).boxes[0].walls[1], true);
+    assert.equal(reduceLab(s, { type: 'lid' }).boxes[0].lid, false);
+    operate('lower'); assert.equal(s.boxes[0].locks[0], true);
+    operate('lift'); assert.equal(s.boxes[0].locks[0], false);
+    operate('slide'); operate('lower');
+    assert.equal(s.boxes[0].bolts[0], false); assert.equal(s.boxes[0].leverRaised[0], false);
+    s = reduceLab(s, { type: 'wall', index: 0 }); assert.equal(s.boxes[0].walls[0], false);
+  });
+  test('MB6 datasheet collapsed height and mouse gesture directions are respected', () => {
+    assert.equal(boxHeight(initialLab().boxes[0]), 0.224);
+    assert.equal(boxHeight(assemble(initialLab()).boxes[0]), 1.076);
+    assert.equal(leverGesture(5, -50), 'lift'); assert.equal(leverGesture(5, 50), 'lower');
+    assert.equal(leverGesture(50, 5), 'slide'); assert.equal(leverGesture(-50, 5), 'slide');
+  });
+  test('MB6 valid insertion seats the feet over pins without moving the lower box', () => {
+    let s = assemble(reduceLab(assemble(initialLab()), { type: 'add' }));
+    const base = JSON.parse(JSON.stringify(s.boxes[0]));
+    s = reduceLab(s, { type: 'move', pose: { ...base.pose, y: MB6.h } });
+    s = reduceLab(s, { type: 'stack' });
+    assert.equal(s.boxes[1].pose.y, MB6.h - MB6.pin);
+    assert.deepEqual(s.boxes[0], base);
+  });
+  test('MB6 new box finds a free floor slot after the first box is moved and rotated', () => {
+    let s = reduceLab(initialLab(), { type: 'move', pose: { x: 0.8, y: 0, z: 0, yaw: Math.PI / 4 } });
+    s = reduceLab(s, { type: 'add' });
+    assert.equal(s.boxes.length, 2);
+    assert.ok(Math.abs(s.boxes[0].pose.x - s.boxes[1].pose.x) > (MB6.w + MB6.d) / (2 * Math.sqrt(2)) + MB6.w / 2);
+  });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }

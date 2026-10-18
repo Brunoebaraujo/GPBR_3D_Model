@@ -268,3 +268,84 @@ de um grupo usam a primeira caixa como referência. O modo **Unidade** e o botã
 **Empilhar cópia** continuam disponíveis para montagem individual. Desfazer/refazer
 trata a inclusão de uma pilha como uma única ação. **Limpar toda a carga** também
 pode ser desfeito, facilitando a troca para um perfil ainda sem dimensões.
+
+## Montagem MB6: Desktop e VR
+
+Abra **Montagem MB6** no Load Studio, ou use `#assembly` (`#vr` continua válido).
+O módulo inicial é **Desktop · Mouse**. A troca para **VR · Headset** preserva
+as caixas, paredes, ferrolhos e posições durante a sessão.
+
+### Desktop
+
+- **Montar peças:** clique ou arraste a tampa para cima para retirar e para baixo
+  para recolocar. Clique nas paredes ou arraste para cima/baixo para montar/dobrar.
+  Os gestos confirmam a operação ao soltar, seguida de animação; as peças não têm
+  física livre. Arraste o fundo para orbitar e role para aproximar.
+- **Alavancas:** use Ver frente/Ver fundo para aproximar os dois pares de fechos.
+  Arraste a alça para cima para levantá-la, horizontalmente para avançar/recolher
+  o ferrolho e para baixo para rebatê-la. Um clique alterna apenas a alça.
+  O curso horizontal é um comando de alternância, independente do sentido do
+  gesto na tela. Os botões de apoio executam as mesmas etapas, individualmente.
+- **Mover caixa:** selecione a caixa e arraste as setas X/Y/Z ou os planos do
+  controle. **Girar caixa:** arraste o arco verde; passos de 5 graus. Posições
+  inválidas retornam ao estado anterior ao soltar. Há movimentos finos de 20 mm.
+- A segunda caixa começa recolhida e fechada. Complete ambas, eleve a superior,
+  alinhe os quatro apoios e confirme **Testar encaixe**. Os botões Elevar e
+  Aproximar ajudam: Aproximar deixa 60 mm de erro para demonstrar a rejeição;
+  três ajustes X de -20 mm centralizam. Um giro de 90 graus deve ser recusado.
+
+### Fechos e validação
+
+O trecho de aproximadamente 00:28–00:30 do vídeo
+[Goodpack MB6 reusable container — Goodpack Limited](https://www.youtube.com/watch?v=n62GPoPrZzw&t=28s)
+mostra alça articulada, deslocamento lateral e retorno à posição rebatida.
+A implementação representa esses três estados mecânicos separadamente:
+
+1. Alça levantada libera o movimento do ferrolho.
+2. Ferrolho avançado retém as paredes, mesmo com a alça ainda levantada.
+3. Alça rebatida com ferrolho avançado conclui o travamento.
+
+A tampa exige as quatro travas concluídas. O destravamento usa a sequência
+inversa do ferrolho: levantar, recolher, rebater. Paredes não dobram enquanto
+ferrolhos adjacentes estão avançados ou alças abertas. O apoio inferior de uma
+pilha fica bloqueado até desempilhar. Movimentos validam uma caixa envolvente
+conservadora na posição final; não há gravidade, trajetória contínua ou cálculo
+estrutural. Limite didático: duas caixas e dois níveis.
+
+### Ficha técnica conferida
+
+PDF fornecido: `GP TDS MB6 - A4 EN251027 (1).pdf`, uma página. A data de emissão
+impressa é **Feb27/2023**, independentemente do nome do arquivo.
+
+| Dado | Especificação |
+| --- | --- |
+| Externo L × W × H | 1220 × 1120 × 1076 mm |
+| Interno L × W × H | 1187 × 1069 × 981 mm |
+| Recolhida L × W × H | 1220 × 1120 × 224 mm |
+| Tara incluindo tampa | 115 ± 3 kg |
+| Tampa | 10,6 ± 1 kg |
+| Carga útil | 1650 kg |
+| Empilhamento carregado | 5 em armazém / 2 em trânsito, conforme restrições da ficha |
+
+Dimensões externas/internas existentes foram confirmadas. A altura recolhida
+foi corrigida para 224 mm. A ficha inclui fotografia e especificações gerais,
+mas **não apresenta cotas, cortes, curso ou ângulos do fecho**, nem cotas dos pés,
+pinos e dobradiças. Alças, ferrolhos e encaixes são aproximações visuais, não CAD
+certificado. Recuo de apoio de 55 mm, pé de 70 mm, pino/penetração de 25 mm,
+curso de ferrolho de 38 mm e tolerância didática de 35 mm são parâmetros do
+simulador. A confirmação centraliza e assenta os pés sobre os pinos; essa
+penetração não é uma medida extraída da ficha. Para fidelidade de fabricação,
+ainda é necessário desenho dimensionado ou fotos detalhadas com escala.
+
+### VR e verificações
+
+WebXR requer HTTPS/localhost e headset/navegador compatíveis. Todos os comandos
+ficam no painel 3D, inclusive a seleção do vértice e as três operações da alavanca.
+Gatilho opera os painéis e peças. Não há rastreamento de mãos ou agarramento livre.
+A sessão imersiva e ergonomia ainda precisam de teste em headset físico.
+
+Testes de regressão cobrem montagem, alavanca em etapas, ferrolho retendo paredes,
+fechamento, independência das caixas, colisão, apoio e inserção dos pinos. O fluxo
+com mouse foi exercitado no navegador: arraste de tampa/parede, levantar/deslizar/
+rebater alavanca, deslocamento pela seta e preservação de estado entre módulos.
+Recarregar ou sair da área Montagem MB6 reinicia o laboratório.
