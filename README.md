@@ -349,3 +349,9 @@ fechamento, independência das caixas, colisão, apoio e inserção dos pinos. O
 com mouse foi exercitado no navegador: arraste de tampa/parede, levantar/deslizar/
 rebater alavanca, deslocamento pela seta e preservação de estado entre módulos.
 Recarregar ou sair da área Montagem MB6 reinicia o laboratório.
+
+### Ordem de montagem e encaixes inferiores
+
+Montagem obrigatória: Frente → Fundo → Esquerda → Direita; desmontagem na ordem inversa. A caixa recolhida contém, de baixo para cima, Direita, Esquerda, Fundo, Frente e tampa. Os eixos das paredes têm alturas distintas para representar essas camadas. Os comandos por mouse, painel e VR compartilham a mesma validação.
+
+As imagens fornecidas orientam os encaixes inferiores em U, linguetas articuladas, travessas e apoios intermediários da base com aberturas. As cotas desses componentes permanecem aproximações visuais, sem validação de fabricação ou simulação de colisão contínua das ferragens.

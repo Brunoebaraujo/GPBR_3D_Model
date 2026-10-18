@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { BoxGeometry, CanvasTexture, Group, Matrix4, Mesh, MeshBasicMaterial, Raycaster, WebGLRenderer } from 'three';
-import { MB6, WALL_NAMES, initialLab, reduceLab, ready, type Pose, type LeverStep } from '../utils/mb6Assembly';
+import { MB6, WALL_NAMES, ASSEMBLY_ORDER, initialLab, reduceLab, ready, type Pose, type LeverStep } from '../utils/mb6Assembly';
 import { Crate, type MouseTool } from './MB6Parts';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import './vr.css';
@@ -111,7 +111,7 @@ export function VRWorkspace() {
   const lever = (step: LeverStep) => dispatch({ type: 'lever', index: corner, step });
   const actions = [
     { label: selected.lid ? 'Retirar tampa' : 'Colocar tampa', run: () => dispatch({ type: 'lid' }) },
-    ...WALL_NAMES.map((name, i) => ({ label: `${selected.walls[i] ? 'Dobrar' : 'Montar'} ${name}`, run: () => dispatch({ type: 'wall', index: i }) })),
+    ...ASSEMBLY_ORDER.map(i => ({ label: `${selected.walls[i] ? 'Dobrar' : 'Montar'} ${WALL_NAMES[i]}`, run: () => dispatch({ type: 'wall', index: i }) })),
     { label: `Alavanca ${corner + 1}: levantar`, run: () => lever('lift') },
     { label: `Alavanca ${corner + 1}: deslizar`, run: () => lever('slide') },
     { label: `Alavanca ${corner + 1}: rebater`, run: () => lever('lower') },
@@ -132,6 +132,7 @@ export function VRWorkspace() {
       <p>{selected.walls.filter(Boolean).length}/4 paredes · {selected.locks.filter(Boolean).length}/4 travas · {selected.support ? 'Empilhada' : ready(selected) ? 'Pronta' : 'Em montagem'}<br />Rotação: {Math.round(selected.pose.yaw * 180 / Math.PI)}°</p>
       <div className="vr-corners" aria-label="Vértices">{selected.locks.map((locked, i) => <button key={i} aria-pressed={corner === i} onClick={() => setCorner(i)}>V{i + 1} · {locked ? 'travado' : selected.leverRaised[i] ? 'alça aberta' : 'livre'}</button>)}</div>
       <p className="vr-lever-guide">Alavanca {corner + 1}: <strong>1. Levantar → 2. Deslizar → 3. Rebater</strong><br />Para destravar, repita as três etapas recolhendo o ferrolho.</p>
+      <p>Montagem: Frente → Fundo → Esquerda → Direita.<br />Desmontagem na ordem inversa. Recolhida, de baixo para cima: Direita → Esquerda → Fundo → Frente → Tampa.</p>
       <details open><summary>Comandos de apoio</summary><div className="vr-actions">{actions.map(a => <button key={a.label} onClick={a.run}>{a.label}</button>)}</div></details>
       <h2>Alinhamento dos pés</h2><small>Eleve, aproxime, ajuste X em −20 mm três vezes e teste. Gire para experimentar um encaixe incompatível.</small>
       {(['x', 'y', 'z'] as const).map(axis => <div className="vr-row" key={axis}><span>{axis.toUpperCase()} {Math.round(selected.pose[axis] * 1000)} mm</span>{[-0.02, 0.02].map(d => <button key={d} aria-label={`${axis.toUpperCase()} ${d > 0 ? '+' : '−'}20 mm`} onClick={() => move(axis, d)}>{d > 0 ? '+' : '−'}20</button>)}</div>)}
