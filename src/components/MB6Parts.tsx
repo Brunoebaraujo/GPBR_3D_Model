@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Edges, TransformControls } from '@react-three/drei';
 import { Group, Vector3 } from 'three';
-import { MB6, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
+import { MB6, WALL_PIVOT_Y, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
 
 type Vec = [number, number, number];
 export type MouseTool = 'assemble' | 'translate' | 'rotate';
@@ -69,12 +69,20 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
 function Wall({ index, box, act, interaction }: { index: number; box: Assembly; act: (a: Action) => void; interaction: Interaction }) {
   const ref = useRef<Group>(null), raised = box.walls[index];
   const width = (index % 2 ? MB6.d : MB6.w) - 0.06;
-  const location: Vec = index === 0 ? [0, 0.115, MB6.d / 2 - 0.025] : index === 1 ? [MB6.w / 2 - 0.025, 0.138, 0] : index === 2 ? [0, 0.161, -MB6.d / 2 + 0.025] : [-MB6.w / 2 + 0.025, 0.184, 0];
+  const pivot = WALL_PIVOT_Y[index];
+  const location: Vec = index === 0 ? [0, pivot, MB6.d / 2 - 0.025] : index === 1 ? [MB6.w / 2 - 0.025, pivot, 0] : index === 2 ? [0, pivot, -MB6.d / 2 + 0.025] : [-MB6.w / 2 + 0.025, pivot, 0];
   const height = MB6.h - 0.035 - location[1];
   const gesture = useGesture(interaction, `${raised ? 'Dobrar' : 'Levantar'} parede: clique ou arraste ${raised ? 'para baixo' : 'para cima'}.`, () => act({ type: 'wall', index }), (_, dy) => { if ((dy < -6 && !raised) || (dy > 6 && raised)) act({ type: 'wall', index }); });
   useFrame((_, dt) => { if (ref.current) ref.current.rotation.x += ((raised ? 0 : -Math.PI / 2) - ref.current.rotation.x) * Math.min(1, dt * 9); });
   return <group position={location} rotation={[0, [0, Math.PI / 2, Math.PI, -Math.PI / 2][index], 0]}>
+    <Part position={[0, (0.07 - pivot) / 2, 0]} size={[width - 0.09, pivot - 0.07, 0.014]} />
+    {/* Fixed U sockets capture the rotating lower rail. */}
+    {[-1, 1].map(side => <group key={side} position={[side * (width / 2 - 0.035), 0, 0]}>
+      {[-1, 1].map(cheek => <Part key={cheek} position={[cheek * 0.018, (0.07 - pivot) / 2, 0]} size={[0.009, pivot - 0.07 + 0.04, 0.044]} color="#d5dce0" />)}
+      <mesh rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.009, 0.009, 0.052, 16]} /><meshStandardMaterial color="#607783" metalness={0.7} roughness={0.3} /></mesh>
+    </group>)}
     <group ref={ref} rotation={[-Math.PI / 2, 0, 0]}>
+      {[-1, 1].map(side => <Part key={side} position={[side * (width / 2 - 0.035), 0.013, 0]} size={[0.024, 0.04, 0.014]} />)}
       <group {...gesture.events} userData={{ activate: () => act({ type: 'wall', index }) }}>
         <Part position={[0, height / 2, 0]} size={[width, height, 0.012]} highlight={gesture.hovered} />
         {[-1, 0, 1].map(x => <Part key={x} position={[x * (width / 2 - 0.025), height / 2, 0.008]} size={[0.025, height, 0.012]} highlight={gesture.hovered} />)}
@@ -110,7 +118,16 @@ export function Crate({ box, selected, tool, dispatch, onPose, interaction }: { 
   };
   return <>
     <group ref={setGroup} position={[box.pose.x, box.pose.y, box.pose.z]} rotation={[0, box.pose.yaw, 0]} onClick={e => { if (!interaction.enabled) { e.stopPropagation(); dispatch({ type: 'select', id: box.id }); } }}>
-      <Part position={[0, 0.095, 0]} size={[MB6.w, 0.04, MB6.d]} color={selected ? '#829da8' : '#a9b7c0'} />
+      <Part position={[0, 0.065, 0]} size={[MB6.w, 0.01, MB6.d]} color={selected ? '#829da8' : '#a9b7c0'} />
+      {/* Open pallet frame with runners and intermediate supports. */}
+      {[-1, 1].map(side => <group key={side}>
+        <Part position={[0, 0.008, side * (MB6.d / 2 - 0.035)]} size={[MB6.w, 0.016, 0.07]} />
+        <Part position={[side * (MB6.w / 2 - 0.035), 0.008, 0]} size={[0.07, 0.016, MB6.d]} />
+        {[-1, 1].map(support => <group key={support}>
+          <Part position={[support * MB6.w / 6, 0.038, side * (MB6.d / 2 - 0.035)]} size={[0.04, 0.044, 0.07]} />
+          <Part position={[side * (MB6.w / 2 - 0.035), 0.038, support * MB6.d / 6]} size={[0.07, 0.044, 0.04]} />
+        </group>)}
+      </group>)}
       {[-1, 1].flatMap(x => [-1, 1].map(z => <group key={`${x}${z}`} position={[x * (MB6.w / 2 - MB6.inset), 0, z * (MB6.d / 2 - MB6.inset)]}>
         {[-1, 1].map(sign => <group key={sign}><Part position={[sign * 0.036, MB6.foot / 2, 0]} size={[0.018, MB6.foot, 0.09]} color="#2563ac" /><Part position={[0, MB6.foot / 2, sign * 0.036]} size={[0.054, MB6.foot, 0.018]} color="#2563ac" /></group>)}
         {box.walls.every(Boolean) && <Part position={[0, MB6.h - MB6.pin / 2, 0]} size={[0.045, MB6.pin, 0.045]} color="#33c9b2" />}

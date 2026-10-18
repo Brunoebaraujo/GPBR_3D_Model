@@ -337,11 +337,11 @@ try {
     const pair=findRoadBatch(side,base,2);assert.equal(pair.length,2);
     assert.equal(validateRoad({...side,units:pair,vehicle:{...side.vehicle,sideHeight:2000}}).valid,false);
   });
-  const { initialLab, reduceLab, ready, fitsStack, MB6, boxHeight, leverGesture } = await load('utils/mb6Assembly.js');
+  const { initialLab, reduceLab, ready, fitsStack, MB6, boxHeight, leverGesture, ASSEMBLY_ORDER, FOLD_ORDER, WALL_PIVOT_Y } = await load('utils/mb6Assembly.js');
   const operateLever = (state, index) => ['lift', 'slide', 'lower'].reduce((s, step) => reduceLab(s, { type: 'lever', index, step }), state);
   const assemble = state => {
     state = reduceLab(state, { type: 'lid' });
-    for (let i = 0; i < 4; i++) state = reduceLab(state, { type: 'wall', index: i });
+    for (const i of ASSEMBLY_ORDER) state = reduceLab(state, { type: 'wall', index: i });
     for (let i = 0; i < 4; i++) state = operateLever(state, i);
     return reduceLab(state, { type: 'lid' });
   };
@@ -359,10 +359,25 @@ try {
     s = reduceLab(s, { type: 'lid' });
     assert.equal(reduceLab(s, { type: 'wall', index: 0 }).boxes[0].walls[0], true);
     s = operateLever(s, 0);
-    s = operateLever(s, 3);
-    s = reduceLab(s, { type: 'wall', index: 0 });
-    assert.deepEqual(s.boxes[0].walls, [false, true, true, true]);
+    s = operateLever(s, 1);
+    s = reduceLab(s, { type: 'wall', index: 1 });
+    assert.deepEqual(s.boxes[0].walls, [true, false, true, true]);
     assert.equal(reduceLab(s, { type: 'lid' }).boxes[0].lid, false);
+  });
+  test('MB6 enforces assembly and reverse folding order', () => {
+    let s = reduceLab(initialLab(), { type: 'lid' });
+    for (const order of [ASSEMBLY_ORDER, FOLD_ORDER]) {
+      for (const expected of order) {
+        for (const wrong of order.filter(i => i !== expected && s.boxes[0].walls[i] === s.boxes[0].walls[expected])) {
+          assert.deepEqual(reduceLab(s, { type: 'wall', index: wrong }).boxes, s.boxes);
+        }
+        s = reduceLab(s, { type: 'wall', index: expected });
+      }
+    }
+    assert.deepEqual(s.boxes[0].walls, [false, false, false, false]);
+    assert.deepEqual([...FOLD_ORDER].sort((a,b) => WALL_PIVOT_Y[a] - WALL_PIVOT_Y[b]), [1,3,2,0]);
+    for (let i = 1; i < FOLD_ORDER.length; i++) assert.ok(WALL_PIVOT_Y[FOLD_ORDER[i]] - WALL_PIVOT_Y[FOLD_ORDER[i-1]] > 0.02);
+    assert.ok(WALL_PIVOT_Y[0] + 0.06 <= MB6.collapsed - 0.012);
   });
   test('MB6 second box is independent and creation is bounded', () => {
     let s = assemble(initialLab()); s = reduceLab(s, { type: 'add' });
@@ -400,7 +415,7 @@ try {
   });
   test('MB6 lever needs lift, slide and lower; a raised engaged bolt still restrains both walls', () => {
     let s = initialLab(); s = reduceLab(s, { type: 'lid' });
-    for (let i = 0; i < 4; i++) s = reduceLab(s, { type: 'wall', index: i });
+    for (const i of ASSEMBLY_ORDER) s = reduceLab(s, { type: 'wall', index: i });
     const operate = step => { s = reduceLab(s, { type: 'lever', index: 0, step }); };
     operate('slide'); assert.equal(s.boxes[0].bolts[0], false);
     operate('lift'); assert.equal(s.boxes[0].leverRaised[0], true); assert.equal(s.boxes[0].locks[0], false);
@@ -412,7 +427,7 @@ try {
     operate('lift'); assert.equal(s.boxes[0].locks[0], false);
     operate('slide'); operate('lower');
     assert.equal(s.boxes[0].bolts[0], false); assert.equal(s.boxes[0].leverRaised[0], false);
-    s = reduceLab(s, { type: 'wall', index: 0 }); assert.equal(s.boxes[0].walls[0], false);
+    s = reduceLab(s, { type: 'wall', index: 1 }); assert.equal(s.boxes[0].walls[1], false);
   });
   test('MB6 datasheet collapsed height and mouse gesture directions are respected', () => {
     assert.equal(boxHeight(initialLab().boxes[0]), 0.224);
