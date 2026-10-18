@@ -1,13 +1,17 @@
 import { MB6_CONTAINER } from '../data/skus';
 
-// Metres. Envelope from the existing catalogue; joint dimensions are provisional.
-export const MB6 = { w: MB6_CONTAINER.externalDimensions.width / 1000, d: MB6_CONTAINER.externalDimensions.depth / 1000, h: MB6_CONTAINER.externalDimensions.height / 1000, foot: 0.07, inset: 0.055, pin: 0.025, tolerance: 0.035 };
+// Envelope and collapsed height checked against GP TDS MB6, Feb 27 2023.
+// Joint/lever dimensions remain visual estimates: the TDS does not dimension them.
+export const MB6 = { w: MB6_CONTAINER.externalDimensions.width / 1000, d: MB6_CONTAINER.externalDimensions.depth / 1000, h: MB6_CONTAINER.externalDimensions.height / 1000, collapsed: 0.224, lidWeightKg: 10.6, foot: 0.07, inset: 0.055, pin: 0.025, tolerance: 0.035 };
 export const WALL_NAMES = ['Frente', 'Direita', 'Fundo', 'Esquerda'];
 export type Pose = { x: number; y: number; z: number; yaw: number };
-export type Assembly = { id: number; walls: boolean[]; locks: boolean[]; lid: boolean; pose: Pose; support: number | null };
+export type LeverStep = 'lift' | 'slide' | 'lower';
+export type Assembly = { id: number; walls: boolean[]; locks: boolean[]; leverRaised: boolean[]; bolts: boolean[]; lid: boolean; pose: Pose; support: number | null };
 export type Lab = { boxes: Assembly[]; selected: number; message: string };
-export type Action = { type: 'select'; id: number } | { type: 'wall' | 'lock'; index: number } | { type: 'lid' | 'add' | 'reset' | 'stack' | 'unstack' } | { type: 'move'; pose: Pose };
-export const createBox = (id: number): Assembly => ({ id, walls: [false, false, false, false], locks: [false, false, false, false], lid: true, pose: { x: id === 1 ? -0.8 : 0.8, y: 0, z: 0, yaw: 0 }, support: null });
+export type Action = { type: 'select'; id: number } | { type: 'wall'; index: number } | { type: 'lever'; index: number; step: LeverStep } | { type: 'lid' | 'add' | 'reset' | 'stack' | 'unstack' } | { type: 'move'; pose: Pose };
+export const createBox = (id: number): Assembly => ({ id, walls: [false, false, false, false], locks: [false, false, false, false], leverRaised: [false, false, false, false], bolts: [false, false, false, false], lid: true, pose: { x: id === 1 ? -0.8 : 0.8, y: 0, z: 0, yaw: 0 }, support: null });
+export const boxHeight = (box: Assembly) => box.walls.some(Boolean) ? MB6.h : MB6.collapsed;
+export const leverGesture = (dx: number, dy: number): LeverStep => Math.abs(dx) > Math.abs(dy) ? 'slide' : dy < 0 ? 'lift' : 'lower';
 export const initialLab = (): Lab => ({ boxes: [createBox(1)], selected: 1, message: 'Retire a tampa para começar a montagem.' });
 export const ready = (b: Assembly) => b.lid && b.walls.every(Boolean) && b.locks.every(Boolean);
 export const cornerPoints = (p: Pose, height = 0) => [-1, 1].flatMap(x => [-1, 1].map(z => {
@@ -43,6 +47,7 @@ export function reduceLab(state: Lab, action: Action): Lab {
   }
   if (b.support !== null) return fail('Desempilhe antes de alterar a caixa.');
   if (action.type === 'lid') {
+    if (!b.lid && b.leverRaised.some(Boolean)) return fail('Rebata todas as alavancas antes de colocar a tampa.');
     if (!b.lid && !(b.walls.every(Boolean) && b.locks.every(Boolean)) && !b.walls.every(w => !w)) return fail('Monte as quatro paredes e trave os quatro vértices antes de fechar.');
     return update({ ...b, lid: !b.lid }, b.lid ? 'Tampa retirada. Clique em cada parede para levantá-la.' : 'Tampa colocada.');
   }
@@ -50,20 +55,25 @@ export function reduceLab(state: Lab, action: Action): Lab {
     const i = action.index;
     if (!Number.isInteger(i) || i < 0 || i > 3) return state;
     if (b.lid) return fail('Retire a tampa primeiro.');
-    if (b.locks[i] || b.locks[(i + 3) % 4]) return fail('Destrave os dois vértices adjacentes primeiro.');
+    if (b.bolts[i] || b.bolts[(i + 3) % 4] || b.leverRaised[i] || b.leverRaised[(i + 3) % 4]) return fail('Recolha os ferrolhos e rebata as duas alavancas adjacentes primeiro.');
     return update({ ...b, walls: b.walls.map((w, j) => j === i ? !w : w) }, `${WALL_NAMES[i]}: ${b.walls[i] ? 'dobrada' : 'montada'}.`);
   }
-  if (action.type === 'lock') {
+  if (action.type === 'lever') {
     const i = action.index;
     if (!Number.isInteger(i) || i < 0 || i > 3) return state;
-    if (b.lid) return fail('Retire a tampa antes de operar as travas.');
+    if (b.lid) return fail('Retire a tampa antes de operar as alavancas.');
     if (!b.walls[i] || !b.walls[(i + 1) % 4]) return fail('Levante as duas paredes adjacentes a este vértice.');
-    return update({ ...b, locks: b.locks.map((v, j) => j === i ? !v : v) }, `Vértice ${i + 1}: ${b.locks[i] ? 'destravado' : 'travado'}.`);
+    if (action.step === 'slide' && !b.leverRaised[i]) return fail('Levante a alça antes de deslizar o ferrolho.');
+    const leverRaised = b.leverRaised.map((v, j) => j === i && action.step !== 'slide' ? action.step === 'lift' : v);
+    const bolts = b.bolts.map((v, j) => j === i && action.step === 'slide' ? !v : v);
+    const locks = bolts.map((v, j) => v && !leverRaised[j]);
+    const status = locks[i] ? 'travado — alça rebatida e ferrolho avançado' : leverRaised[i] ? (bolts[i] ? 'ferrolho avançado; rebata a alça para concluir' : 'alça levantada; deslize o ferrolho') : 'destravado — ferrolho recolhido';
+    return update({ ...b, leverRaised, bolts, locks }, `Vértice ${i + 1}: ${status}.`);
   }
   if (action.type === 'stack') {
     const base = state.boxes.find(other => fitsStack(b, other));
     if (!base) return fail('Encaixe recusado: complete ambas as caixas e alinhe os quatro pés aos vértices (35 mm).');
-    return update({ ...b, support: base.id, pose: { ...base.pose, y: base.pose.y + MB6.h, yaw: base.pose.yaw + (Math.cos(b.pose.yaw - base.pose.yaw) < 0 ? Math.PI : 0) } }, 'Encaixe confirmado: quatro pés alinhados aos quatro vértices.');
+    return update({ ...b, support: base.id, pose: { ...base.pose, y: base.pose.y + MB6.h - MB6.pin, yaw: base.pose.yaw + (Math.cos(b.pose.yaw - base.pose.yaw) < 0 ? Math.PI : 0) } }, 'Encaixe confirmado: quatro pés alinhados aos quatro vértices.');
   }
   if (action.type === 'move') {
     const p = action.pose;
@@ -71,7 +81,12 @@ export function reduceLab(state: Lab, action: Action): Lab {
     // Conservative swept-free endpoint envelope. Raised placement is a preview, never a supported stack.
     const ex = Math.abs(Math.cos(p.yaw)) * MB6.w / 2 + Math.abs(Math.sin(p.yaw)) * MB6.d / 2;
     const ez = Math.abs(Math.sin(p.yaw)) * MB6.w / 2 + Math.abs(Math.cos(p.yaw)) * MB6.d / 2;
-    const collision = state.boxes.some(other => other.id !== b.id && Math.abs(p.x - other.pose.x) < ex + MB6.w / 2 - 0.001 && Math.abs(p.z - other.pose.z) < ez + MB6.d / 2 - 0.001 && Math.abs(p.y - other.pose.y) < MB6.h - 0.001);
+    const collision = state.boxes.some(other => {
+      if (other.id === b.id) return false;
+      const ox = Math.abs(Math.cos(other.pose.yaw)) * MB6.w / 2 + Math.abs(Math.sin(other.pose.yaw)) * MB6.d / 2;
+      const oz = Math.abs(Math.sin(other.pose.yaw)) * MB6.w / 2 + Math.abs(Math.cos(other.pose.yaw)) * MB6.d / 2;
+      return Math.abs(p.x - other.pose.x) < ex + ox - 0.001 && Math.abs(p.z - other.pose.z) < ez + oz - 0.001 && p.y < other.pose.y + boxHeight(other) - 0.001 && p.y + boxHeight(b) > other.pose.y + 0.001;
+    });
     if (collision) return fail('Movimento recusado: caixas se sobrepõem. Eleve antes de aproximar.');
     return update({ ...b, pose: { ...p } }, p.y > 0 ? 'Posição de teste suspensa. Alinhe e confirme o encaixe.' : 'Caixa posicionada no piso.');
   }

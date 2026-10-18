@@ -1,48 +1,31 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Edges } from '@react-three/drei';
+import { useEffect, useMemo, useReducer, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
 import { BoxGeometry, CanvasTexture, Group, Matrix4, Mesh, MeshBasicMaterial, Raycaster, WebGLRenderer } from 'three';
-import { MB6, WALL_NAMES, initialLab, reduceLab, ready, type Action, type Assembly } from '../utils/mb6Assembly';
+import { MB6, WALL_NAMES, initialLab, reduceLab, ready, type Pose, type LeverStep } from '../utils/mb6Assembly';
+import { Crate, type MouseTool } from './MB6Parts';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import './vr.css';
 
 type Vec = [number, number, number];
-function Part({ position, size, color = '#b8c5cd', action }: { position: Vec; size: Vec; color?: string; action?: () => void }) {
-  return <mesh position={position} userData={{ activate: action }} onClick={e => { e.stopPropagation(); action?.(); }}>
-    <boxGeometry args={size} /><meshStandardMaterial color={color} metalness={0.55} roughness={0.38} /><Edges color="#465564" />
-  </mesh>;
+type ViewRequest = { kind: 'front' | 'back' | 'overview'; pose: Pose };
+function CameraView({ request, presenting }: { request: ViewRequest | null; presenting: boolean }) {
+  const { camera, controls } = useThree();
+  useEffect(() => {
+    if (!request || presenting || !controls) return;
+    const orbit = controls as OrbitControlsImpl;
+    const { pose, kind } = request;
+    if (kind === 'overview') { camera.position.set(3.4, 2.9, 5.3); orbit.target.set(0, 0.8, 0); }
+    else {
+      const direction = kind === 'front' ? 1 : -1;
+      const dx = direction * 0.2, dz = direction * 2.6;
+      camera.position.set(pose.x + dx * Math.cos(pose.yaw) + dz * Math.sin(pose.yaw), pose.y + 1.25, pose.z - dx * Math.sin(pose.yaw) + dz * Math.cos(pose.yaw));
+      orbit.target.set(pose.x, pose.y + 0.7, pose.z); orbit.update();
+    }
+    orbit.update();
+  }, [camera, controls, request, presenting]);
+  return null;
 }
-
-function Wall({ index, raised, action }: { index: number; raised: boolean; action: () => void }) {
-  const ref = useRef<Group>(null);
-  const side = index % 2 === 1;
-  const width = side ? MB6.d - 0.06 : MB6.w - 0.06;
-  
-  const location: Vec = index === 0 ? [0, 0.13, MB6.d / 2 - 0.025] : index === 1 ? [MB6.w / 2 - 0.025, 0.15, 0] : index === 2 ? [0, 0.17, -MB6.d / 2 + 0.025] : [-MB6.w / 2 + 0.025, 0.19, 0];
-  const height = MB6.h - 0.04 - location[1];
-  const yaw = [0, Math.PI / 2, Math.PI, -Math.PI / 2][index];
-  useFrame((_, dt) => { if (ref.current) ref.current.rotation.x += ((raised ? 0 : -Math.PI / 2) - ref.current.rotation.x) * Math.min(1, dt * 9); });
-  return <group position={location} rotation={[0, yaw, 0]}><group ref={ref} rotation={[-Math.PI / 2, 0, 0]}>
-    <Part position={[0, height / 2, 0]} size={[width, height, 0.018]} action={action} />
-    {[-1, 0, 1].map(x => <Part key={x} position={[x * (width / 2 - 0.025), height / 2, 0.016]} size={[0.025, height, 0.025]} action={action} />)}
-    {[0, 0.5, 1].map(y => <Part key={y} position={[0, y * height, 0.016]} size={[width, 0.025, 0.025]} action={action} />)}
-  </group></group>;
-}
-
-function Crate({ box, dispatch }: { box: Assembly; dispatch: (a: Action) => void }) {
-  const act = (a: Action) => { dispatch({ type: 'select', id: box.id }); dispatch(a); };
-  const lidY = box.walls.some(Boolean) ? MB6.h - 0.025 : 0.25;
-  return <group position={[box.pose.x, box.pose.y, box.pose.z]} rotation={[0, box.pose.yaw, 0]}>
-    <Part position={[0, 0.1, 0]} size={[MB6.w, 0.05, MB6.d]} action={() => dispatch({ type: 'select', id: box.id })} />
-    {[-1, 1].flatMap(x => [-1, 1].map(z => <group key={`${x}${z}`} position={[x * (MB6.w / 2 - MB6.inset), 0, z * (MB6.d / 2 - MB6.inset)]}>
-      {[-1, 1].map(sign => <group key={sign}><Part position={[sign * 0.036, MB6.foot / 2, 0]} size={[0.018, MB6.foot, 0.09]} color="#2563ac" /><Part position={[0, MB6.foot / 2, sign * 0.036]} size={[0.054, MB6.foot, 0.018]} color="#2563ac" /></group>)}
-      {box.walls.every(Boolean) && <Part position={[0, MB6.h, 0]} size={[0.045, MB6.pin * 2, 0.045]} color="#33c9b2" />}
-    </group>))}
-    {box.walls.map((raised, i) => <Wall key={i} index={i} raised={raised} action={() => act({ type: 'wall', index: i })} />)}
-    {[[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([x, z], i) => <Part key={i} position={[x * (MB6.w / 2 - 0.025), box.walls[i] && box.walls[(i + 1) % 4] ? MB6.h - 0.085 : 0.22, z * (MB6.d / 2 - 0.025)]} size={[0.065, 0.1, 0.065]} color={box.locks[i] ? '#24c5a2' : '#eea447'} action={() => act({ type: 'lock', index: i })} />)}
-    <Part position={box.lid ? [0, lidY, 0] : [0, 0.025, 1.7]} size={[MB6.w - 0.12, 0.035, MB6.d - 0.12]} color="#e0e7ea" action={() => act({ type: 'lid' })} />
-  </group>;
-}
-
 function Label({ text, position, action, width = 1.1, color = '#183747' }: { text: string; position: Vec; action?: () => void; width?: number; color?: string }) {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 128;
@@ -73,8 +56,11 @@ function XRBridge({ onRenderer, onPresenting }: { onRenderer: (gl: WebGLRenderer
       const select = () => {
         controller.updateWorldMatrix(true, false); rotation.extractRotation(controller.matrixWorld);
         ray.ray.origin.setFromMatrixPosition(controller.matrixWorld); ray.ray.direction.set(0, 0, -1).applyMatrix4(rotation);
-        const hit = ray.intersectObjects(scene.children, true).find(h => typeof h.object.userData.activate === 'function');
-        hit?.object.userData.activate();
+        for (const hit of ray.intersectObjects(scene.children, true)) {
+          let object: typeof hit.object | null = hit.object;
+          while (object && typeof object.userData.activate !== 'function') object = object.parent;
+          if (object) { object.userData.activate(); break; }
+        }
       };
       controller.addEventListener('select', select);
       return { controller, rig, beam, select };
@@ -90,6 +76,12 @@ function XRBridge({ onRenderer, onPresenting }: { onRenderer: (gl: WebGLRenderer
 
 export function VRWorkspace() {
   const [lab, dispatch] = useReducer(reduceLab, undefined, initialLab);
+  const [module, setModule] = useState<'desktop' | 'vr'>('desktop');
+  const [tool, setTool] = useState<MouseTool>('assemble');
+  const [dragging, setDragging] = useState(false);
+  const [hint, setHint] = useState('Clique na tampa ou arraste-a para cima para começar.');
+  const [corner, setCorner] = useState(0);
+  const [view, setView] = useState<ViewRequest | null>(null);
   const [renderer, setRenderer] = useState<WebGLRenderer | null>(null);
   const [presenting, setPresenting] = useState(false);
   const [xrStatus, setXRStatus] = useState('Verificando headset…');
@@ -110,10 +102,20 @@ export function VRWorkspace() {
     finally { setPending(false); }
   };
   const move = (axis: 'x' | 'y' | 'z', delta: number) => dispatch({ type: 'move', pose: { ...selected.pose, [axis]: Math.round((selected.pose[axis] + delta) * 1000) / 1000 } });
+  const onPose = (id: number, pose: Pose) => {
+    const current = reduceLab(lab, { type: 'select', id });
+    const next = reduceLab(current, { type: 'move', pose });
+    dispatch({ type: 'select', id }); dispatch({ type: 'move', pose });
+    return next.boxes.find(b => b.id === id)!.pose;
+  };
+  const lever = (step: LeverStep) => dispatch({ type: 'lever', index: corner, step });
   const actions = [
     { label: selected.lid ? 'Retirar tampa' : 'Colocar tampa', run: () => dispatch({ type: 'lid' }) },
     ...WALL_NAMES.map((name, i) => ({ label: `${selected.walls[i] ? 'Dobrar' : 'Montar'} ${name}`, run: () => dispatch({ type: 'wall', index: i }) })),
-    ...selected.locks.map((locked, i) => ({ label: `${locked ? 'Destravar' : 'Travar'} vértice ${i + 1}`, run: () => dispatch({ type: 'lock', index: i }) })),
+    { label: `Alavanca ${corner + 1}: levantar`, run: () => lever('lift') },
+    { label: `Alavanca ${corner + 1}: deslizar`, run: () => lever('slide') },
+    { label: `Alavanca ${corner + 1}: rebater`, run: () => lever('lower') },
+    { label: `Trocar vértice (${corner + 1}/4)`, run: () => setCorner(i => (i + 1) % 4) },
     { label: 'Criar segunda caixa', run: () => dispatch({ type: 'add' }) },
     { label: 'Elevar para empilhar', run: () => dispatch({ type: 'move', pose: { ...selected.pose, y: MB6.h } }) },
     { label: 'Aproximar da outra caixa', run: () => { const other = lab.boxes.find(b => b.id !== selected.id); if (other) dispatch({ type: 'move', pose: { ...selected.pose, x: other.pose.x + 0.06, z: other.pose.z } }); } },
@@ -122,32 +124,35 @@ export function VRWorkspace() {
     { label: 'Girar 90°', run: () => dispatch({ type: 'move', pose: { ...selected.pose, yaw: selected.pose.yaw + Math.PI / 2 } }) },
   ];
   return <main className="vr-lab">
-    <aside className="vr-panel"><p className="vr-eyebrow">LABORATÓRIO INTERATIVO</p><h1>Monte. Trave. Empilhe.</h1><p>MB6 · escala 1:1 · duas caixas</p>
-      <button className="vr-primary" disabled={!supported || !renderer || pending} onClick={() => void enter()}>{pending ? 'Conectando…' : 'Entrar em VR'}</button><small>{xrStatus}</small>
-      <p>Mouse: arraste para orbitar e role para aproximar. Clique nas peças ou nos botões. VR: aponte o controle e aperte o gatilho nos painéis ou peças.</p>
+    <aside className="vr-panel"><p className="vr-eyebrow">LOAD STUDIO · MONTAGEM</p><h1>Monte. Trave. Empilhe.</h1><p>MB6 · 1120 × 1220 × 1076 mm</p>
+      <div className="vr-module-choice" aria-label="Módulo de interação"><button aria-pressed={module === 'desktop'} onClick={() => { setModule('desktop'); setTool('assemble'); }}>Desktop · Mouse</button><button aria-pressed={module === 'vr'} onClick={() => { setModule('vr'); setTool('assemble'); }}>VR · Headset</button></div>
+      {module === 'vr' ? <><button className="vr-primary" disabled={!supported || !renderer || pending} onClick={() => void enter()}>{pending ? 'Conectando…' : 'Entrar em VR'}</button><small>{xrStatus}</small><p>Aponte o controle e aperte o gatilho. Use o painel 3D para levantar, deslizar e rebater cada alavanca.</p></> : <><h2>Manipular com o mouse</h2><div className="vr-tools">{([['assemble', 'Montar peças'], ['translate', 'Mover caixa'], ['rotate', 'Girar caixa']] as const).map(([value, label]) => <button key={value} aria-pressed={tool === value} onClick={() => { setTool(value); setDragging(false); }}>{label}</button>)}</div><p>{tool === 'assemble' ? 'Clique ou arraste tampa e paredes. Nas alavancas: arraste para cima, na horizontal e para baixo. Arraste o fundo para orbitar; role para aproximar.' : tool === 'translate' ? 'Selecione a caixa e arraste as setas: verde eleva, vermelho e azul alinham no piso. Ao soltar, posições inválidas retornam.' : 'Arraste o arco verde para girar a caixa. A rotação ocorre em passos de 5°.'}</p></>}
       <div className="vr-row">{lab.boxes.map(b => <button key={b.id} aria-pressed={selected.id === b.id} onClick={() => dispatch({ type: 'select', id: b.id })}>Caixa {b.id}</button>)}</div>
-      <p>{selected.walls.filter(Boolean).length}/4 paredes · {selected.locks.filter(Boolean).length}/4 travas · {selected.support ? 'Empilhada' : ready(selected) ? 'Pronta' : 'Em montagem'}</p>
-      <div className="vr-actions">{actions.map(a => <button key={a.label} onClick={a.run}>{a.label}</button>)}</div>
+      {module === 'desktop' && <div className="vr-tools" aria-label="Vistas da caixa">{([['front', 'Ver frente'], ['back', 'Ver fundo'], ['overview', 'Visão geral']] as const).map(([kind, label]) => <button key={kind} onClick={() => setView({ kind, pose: { ...selected.pose } })}>{label}</button>)}</div>}
+      <p>{selected.walls.filter(Boolean).length}/4 paredes · {selected.locks.filter(Boolean).length}/4 travas · {selected.support ? 'Empilhada' : ready(selected) ? 'Pronta' : 'Em montagem'}<br />Rotação: {Math.round(selected.pose.yaw * 180 / Math.PI)}°</p>
+      <div className="vr-corners" aria-label="Vértices">{selected.locks.map((locked, i) => <button key={i} aria-pressed={corner === i} onClick={() => setCorner(i)}>V{i + 1} · {locked ? 'travado' : selected.leverRaised[i] ? 'alça aberta' : 'livre'}</button>)}</div>
+      <p className="vr-lever-guide">Alavanca {corner + 1}: <strong>1. Levantar → 2. Deslizar → 3. Rebater</strong><br />Para destravar, repita as três etapas recolhendo o ferrolho.</p>
+      <details open><summary>Comandos de apoio</summary><div className="vr-actions">{actions.map(a => <button key={a.label} onClick={a.run}>{a.label}</button>)}</div></details>
       <h2>Alinhamento dos pés</h2><small>Eleve, aproxime, ajuste X em −20 mm três vezes e teste. Gire para experimentar um encaixe incompatível.</small>
       {(['x', 'y', 'z'] as const).map(axis => <div className="vr-row" key={axis}><span>{axis.toUpperCase()} {Math.round(selected.pose[axis] * 1000)} mm</span>{[-0.02, 0.02].map(d => <button key={d} aria-label={`${axis.toUpperCase()} ${d > 0 ? '+' : '−'}20 mm`} onClick={() => move(axis, d)}>{d > 0 ? '+' : '−'}20</button>)}</div>)}
       <button onClick={() => dispatch({ type: 'reset' })}>Reiniciar laboratório</button>
-      <p className="vr-note">Encaixes ilustrativos: medidas dos pés, travas e dobradiças ainda precisam ser conferidas na ficha técnica. Não simula resistência estrutural.</p>
+      <p className="vr-note">Ficha conferida: recolhida 224 mm; tampa 10,6 kg. Alavancas reproduzem a sequência visual do vídeo. Cotas dos fechos e encaixes não constam na ficha e continuam aproximadas.</p>
     </aside>
-    <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status">{lab.message}</div>
-      <Canvas camera={{ position: [3.4, 2.9, 5.3], fov: 48 }}><color attach="background" args={['#101e2a']} /><ambientLight intensity={1.8} /><directionalLight position={[3, 7, 4]} intensity={3} />
-        <gridHelper args={[10, 40, '#34626d', '#253b48']} /><OrbitControls enabled={!presenting} target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={2} maxDistance={9} />
+    <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status"><span className="vr-mode-label">{module === 'desktop' ? 'DESKTOP · MOUSE' : 'VR · HEADSET'}</span>{lab.message}</div><div className="vr-mouse-hint">{module === 'desktop' ? hint : 'Aponte para o painel e use o gatilho do controle.'}</div>
+      <Canvas camera={{ position: [2.4, 2.2, 3.5], fov: 48 }}><color attach="background" args={['#101e2a']} /><ambientLight intensity={1.8} /><directionalLight position={[3, 7, 4]} intensity={3} />
+        <gridHelper args={[10, 40, '#34626d', '#253b48']} /><OrbitControls makeDefault enabled={!presenting && !dragging} target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.8} maxDistance={9} />
         <XRBridge onRenderer={setRenderer} onPresenting={setPresenting} />
-        {lab.boxes.map(b => <Crate key={b.id} box={b} dispatch={dispatch} />)}
-        <group position={[0, 0, -1.6]}>
+        <CameraView request={view} presenting={presenting} />
+        {lab.boxes.map(b => <Crate key={b.id} box={b} selected={b.id === selected.id} tool={module === 'desktop' ? tool : 'assemble'} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onPose={onPose} interaction={{ enabled: module === 'desktop' && tool === 'assemble', busy: setDragging, hint: setHint }} />)}
+        {module === 'vr' && <group position={[0, 0, -1.6]}>
           <Label text={`MB6 • CAIXA ${selected.id} • ${selected.walls.filter(Boolean).length}/4 PAREDES • ${selected.locks.filter(Boolean).length}/4 TRAVAS`} position={[0, 2.6, 0]} width={3.8} />
           <Label text={lab.message} position={[0, 2.42, 0]} width={3.8} />
           {actions.map((a, i) => <Label key={i} text={a.label} position={[-1.3 + (i % 3) * 1.3, 2.2 - Math.floor(i / 3) * 0.18, 0]} action={a.run} />)}
           {(['x', 'y', 'z'] as const).flatMap((axis, i) => [-0.02, 0.02].map((d, j) => <Label key={`${axis}${d}`} text={`${axis.toUpperCase()} ${d > 0 ? '+' : '−'}20 mm`} position={[-1.5 + (i * 2 + j) * 0.6, 1.22, 0]} width={0.55} action={() => move(axis, d)} />))}
           {lab.boxes.map((b, i) => <Label key={b.id} text={`Selecionar caixa ${b.id}`} position={[-0.65 + i * 1.3, 1.02, 0]} action={() => dispatch({ type: 'select', id: b.id })} />)}
           <Label text="Reiniciar" position={[-0.65, 0.82, 0]} action={() => dispatch({ type: 'reset' })} /><Label text="Sair do VR" position={[0.65, 0.82, 0]} action={() => void renderer?.xr.getSession()?.end()} />
-        </group>
+        </group>}
       </Canvas>
     </section>
   </main>;
 }
-

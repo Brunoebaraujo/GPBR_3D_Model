@@ -337,18 +337,19 @@ try {
     const pair=findRoadBatch(side,base,2);assert.equal(pair.length,2);
     assert.equal(validateRoad({...side,units:pair,vehicle:{...side.vehicle,sideHeight:2000}}).valid,false);
   });
-  const { initialLab, reduceLab, ready, fitsStack, MB6 } = await load('utils/mb6Assembly.js');
+  const { initialLab, reduceLab, ready, fitsStack, MB6, boxHeight, leverGesture } = await load('utils/mb6Assembly.js');
+  const operateLever = (state, index) => ['lift', 'slide', 'lower'].reduce((s, step) => reduceLab(s, { type: 'lever', index, step }), state);
   const assemble = state => {
     state = reduceLab(state, { type: 'lid' });
     for (let i = 0; i < 4; i++) state = reduceLab(state, { type: 'wall', index: i });
-    for (let i = 0; i < 4; i++) state = reduceLab(state, { type: 'lock', index: i });
+    for (let i = 0; i < 4; i++) state = operateLever(state, i);
     return reduceLab(state, { type: 'lid' });
   };
   test('MB6 starts folded and closed; lid guards every wall and premature closing', () => {
     let s = initialLab(); const original = JSON.parse(JSON.stringify(s));
     assert.equal(reduceLab(s, { type: 'wall', index: 0 }).boxes[0].walls[0], false);
     s = reduceLab(s, { type: 'lid' });
-    assert.equal(reduceLab(s, { type: 'lock', index: 0 }).boxes[0].locks[0], false);
+    assert.equal(operateLever(s, 0).boxes[0].locks[0], false);
     s = reduceLab(s, { type: 'wall', index: 0 });
     assert.equal(reduceLab(s, { type: 'lid' }).boxes[0].lid, false);
     assert.deepEqual(initialLab(), original);
@@ -357,8 +358,8 @@ try {
     let s = assemble(initialLab()); assert.equal(ready(s.boxes[0]), true);
     s = reduceLab(s, { type: 'lid' });
     assert.equal(reduceLab(s, { type: 'wall', index: 0 }).boxes[0].walls[0], true);
-    s = reduceLab(s, { type: 'lock', index: 0 });
-    s = reduceLab(s, { type: 'lock', index: 3 });
+    s = operateLever(s, 0);
+    s = operateLever(s, 3);
     s = reduceLab(s, { type: 'wall', index: 0 });
     assert.deepEqual(s.boxes[0].walls, [false, true, true, true]);
     assert.equal(reduceLab(s, { type: 'lid' }).boxes[0].lid, false);
@@ -397,6 +398,35 @@ try {
     for (const pose of [{ x: NaN, y: 0, z: 0, yaw: 0 }, { x: 0, y: -1, z: 0, yaw: 0 }, { x: 4, y: 0, z: 0, yaw: 0 }]) assert.deepEqual(reduceLab(s, { type: 'move', pose }).boxes, s.boxes);
     assert.deepEqual(reduceLab(s, { type: 'wall', index: 10 }).boxes, s.boxes);
   });
+  test('MB6 lever needs lift, slide and lower; a raised engaged bolt still restrains both walls', () => {
+    let s = initialLab(); s = reduceLab(s, { type: 'lid' });
+    for (let i = 0; i < 4; i++) s = reduceLab(s, { type: 'wall', index: i });
+    const operate = step => { s = reduceLab(s, { type: 'lever', index: 0, step }); };
+    operate('slide'); assert.equal(s.boxes[0].bolts[0], false);
+    operate('lift'); assert.equal(s.boxes[0].leverRaised[0], true); assert.equal(s.boxes[0].locks[0], false);
+    operate('slide'); assert.equal(s.boxes[0].bolts[0], true); assert.equal(s.boxes[0].locks[0], false);
+    assert.equal(reduceLab(s, { type: 'wall', index: 0 }).boxes[0].walls[0], true);
+    assert.equal(reduceLab(s, { type: 'wall', index: 1 }).boxes[0].walls[1], true);
+    assert.equal(reduceLab(s, { type: 'lid' }).boxes[0].lid, false);
+    operate('lower'); assert.equal(s.boxes[0].locks[0], true);
+    operate('lift'); assert.equal(s.boxes[0].locks[0], false);
+    operate('slide'); operate('lower');
+    assert.equal(s.boxes[0].bolts[0], false); assert.equal(s.boxes[0].leverRaised[0], false);
+    s = reduceLab(s, { type: 'wall', index: 0 }); assert.equal(s.boxes[0].walls[0], false);
+  });
+  test('MB6 datasheet collapsed height and mouse gesture directions are respected', () => {
+    assert.equal(boxHeight(initialLab().boxes[0]), 0.224);
+    assert.equal(boxHeight(assemble(initialLab()).boxes[0]), 1.076);
+    assert.equal(leverGesture(5, -50), 'lift'); assert.equal(leverGesture(5, 50), 'lower');
+    assert.equal(leverGesture(50, 5), 'slide'); assert.equal(leverGesture(-50, 5), 'slide');
+  });
+  test('MB6 valid insertion seats the feet over pins without moving the lower box', () => {
+    let s = assemble(reduceLab(assemble(initialLab()), { type: 'add' }));
+    const base = JSON.parse(JSON.stringify(s.boxes[0]));
+    s = reduceLab(s, { type: 'move', pose: { ...base.pose, y: MB6.h } });
+    s = reduceLab(s, { type: 'stack' });
+    assert.equal(s.boxes[1].pose.y, MB6.h - MB6.pin);
+    assert.deepEqual(s.boxes[0], base);
+  });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }
-
