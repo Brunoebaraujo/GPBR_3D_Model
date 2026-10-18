@@ -12,6 +12,11 @@ export type Action = { type: 'select'; id: number } | { type: 'wall'; index: num
 export const createBox = (id: number): Assembly => ({ id, walls: [false, false, false, false], locks: [false, false, false, false], leverRaised: [false, false, false, false], bolts: [false, false, false, false], lid: true, pose: { x: id === 1 ? -0.8 : 0.8, y: 0, z: 0, yaw: 0 }, support: null });
 export const boxHeight = (box: Assembly) => box.walls.some(Boolean) ? MB6.h : MB6.collapsed;
 export const leverGesture = (dx: number, dy: number): LeverStep => Math.abs(dx) > Math.abs(dy) ? 'slide' : dy < 0 ? 'lift' : 'lower';
+const floorSlot = (boxes: Assembly[], preferredX: number) => [preferredX, -0.8, -2.4, 2.4].find(x => boxes.every(other => {
+  const halfX = Math.abs(Math.cos(other.pose.yaw)) * MB6.w / 2 + Math.abs(Math.sin(other.pose.yaw)) * MB6.d / 2;
+  const halfZ = Math.abs(Math.sin(other.pose.yaw)) * MB6.w / 2 + Math.abs(Math.cos(other.pose.yaw)) * MB6.d / 2;
+  return Math.abs(other.pose.x - x) > halfX + MB6.w / 2 + 0.04 || Math.abs(other.pose.z) > halfZ + MB6.d / 2 + 0.04;
+}));
 export const initialLab = (): Lab => ({ boxes: [createBox(1)], selected: 1, message: 'Retire a tampa para começar a montagem.' });
 export const ready = (b: Assembly) => b.lid && b.walls.every(Boolean) && b.locks.every(Boolean);
 export const cornerPoints = (p: Pose, height = 0) => [-1, 1].flatMap(x => [-1, 1].map(z => {
@@ -32,17 +37,20 @@ export function reduceLab(state: Lab, action: Action): Lab {
   if (action.type === 'reset') return initialLab();
   if (action.type === 'select') return state.boxes.some(b => b.id === action.id) ? { ...state, selected: action.id } : state;
   const fail = (message: string) => ({ ...state, message });
-  if (action.type === 'add') return state.boxes.length >= 2 ? fail('O laboratório permite duas caixas.') : { boxes: [...state.boxes, createBox(2)], selected: 2, message: 'Caixa 2 criada fechada e dobrada. Retire a tampa.' };
+  if (action.type === 'add') {
+    if (state.boxes.length >= 2) return fail('O laboratório permite duas caixas.');
+    const x = floorSlot(state.boxes, 0.8);
+    if (x === undefined) return fail('Libere espaço no piso antes de criar outra caixa.');
+    const box = createBox(2); box.pose.x = x;
+    return { boxes: [...state.boxes, box], selected: 2, message: 'Caixa 2 criada fechada e dobrada. Retire a tampa.' };
+  }
   const b = state.boxes.find(box => box.id === state.selected)!;
   const update = (next: Assembly, message: string) => ({ ...state, boxes: state.boxes.map(box => box.id === b.id ? next : box), message });
   if (state.boxes.some(box => box.support === b.id)) return fail('Desempilhe a caixa superior antes de alterar a base.');
   if (action.type === 'unstack') {
     if (b.support === null) return fail('Esta caixa já está no piso.');
-    for (const x of [createBox(b.id).pose.x, -2.4, 2.4]) {
-      const pose = { x, y: 0, z: 0, yaw: 0 };
-      const free = state.boxes.every(other => other.id === b.id || Math.abs(other.pose.x - x) > MB6.w + 0.1 || Math.abs(other.pose.z) > MB6.d + 0.1);
-      if (free) return update({ ...b, support: null, pose }, 'Caixa devolvida ao piso.');
-    }
+    const x = floorSlot(state.boxes.filter(other => other.id !== b.id), createBox(b.id).pose.x);
+    if (x !== undefined) return update({ ...b, support: null, pose: { x, y: 0, z: 0, yaw: 0 } }, 'Caixa devolvida ao piso.');
     return fail('Libere espaço no piso antes de desempilhar.');
   }
   if (b.support !== null) return fail('Desempilhe antes de alterar a caixa.');

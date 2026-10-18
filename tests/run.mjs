@@ -428,5 +428,11 @@ try {
     assert.equal(s.boxes[1].pose.y, MB6.h - MB6.pin);
     assert.deepEqual(s.boxes[0], base);
   });
+  test('MB6 new box finds a free floor slot after the first box is moved and rotated', () => {
+    let s = reduceLab(initialLab(), { type: 'move', pose: { x: 0.8, y: 0, z: 0, yaw: Math.PI / 4 } });
+    s = reduceLab(s, { type: 'add' });
+    assert.equal(s.boxes.length, 2);
+    assert.ok(Math.abs(s.boxes[0].pose.x - s.boxes[1].pose.x) > (MB6.w + MB6.d) / (2 * Math.sqrt(2)) + MB6.w / 2);
+  });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }
