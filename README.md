@@ -340,8 +340,8 @@ ainda é necessário desenho dimensionado ou fotos detalhadas com escala.
 ### VR e verificações
 
 WebXR requer HTTPS/localhost e headset/navegador compatíveis. Todos os comandos
-ficam no painel 3D, inclusive a seleção do vértice e as três operações da alavanca.
-Gatilho opera os painéis e peças. Não há rastreamento de mãos ou agarramento livre.
+ficam na prancheta presa ao controle esquerdo, com três páginas. O raio direito
+aciona seus botões. Não há rastreamento de mãos sem controles.
 A sessão imersiva e ergonomia ainda precisam de teste em headset físico.
 
 Testes de regressão cobrem montagem, alavanca em etapas, ferrolho retendo paredes,
@@ -355,3 +355,16 @@ Recarregar ou sair da área Montagem MB6 reinicia o laboratório.
 Montagem obrigatória: Frente → Fundo → Esquerda → Direita; desmontagem na ordem inversa. A caixa recolhida contém, de baixo para cima, Direita, Esquerda, Fundo, Frente e tampa. Os eixos das paredes têm alturas distintas para representar essas camadas. Os comandos por mouse, painel e VR compartilham a mesma validação.
 
 As imagens fornecidas orientam os encaixes inferiores em U, linguetas articuladas, travessas e apoios intermediários da base com aberturas. As cotas desses componentes permanecem aproximações visuais, sem validação de fabricação ou simulação de colisão contínua das ferragens.
+
+### Quest 2: navegação e agarramento
+
+- Um grip lateral + analógico horizontal orbita a visão ao redor da caixa selecionada; vertical ajusta a altura. Dois grips + analógico vertical aproximam/afastam a câmera (sem mudar o campo de visão do headset). Soltar os grips interrompe o movimento.
+- A prancheta acompanha posição e orientação do controle esquerdo. Use o gatilho direito para ações e páginas; os botões laterais são reservados à navegação. Ela se oculta enquanto um gatilho segura uma peça ou aguarda a segunda mão, para não bloquear a mira.
+- Mire no ferrolho com qualquer controle e mantenha o gatilho. Levante a mão ou puxe a alça, deslize na direção do ferrolho e rebata para concluir. Na abertura, o sentido do deslizamento se inverte. Soltar entre etapas mantém o estado mecânico e permite retomar.
+- Com tampa e quatro travas fechadas, mire no corpo da mesma caixa com ambas as mãos e mantenha os dois gatilhos. O ponto médio das mãos transporta a caixa; girar as mãos na horizontal muda sua orientação, mantendo-a vertical e sem redimensioná-la. Soltar qualquer gatilho tenta apoiar.
+- Os quatro pés precisam corresponder aos vértices da base pronta (tolerância existente de 35 mm). No piso, a soltura aceita até 80 mm de altura. Soltura sem apoio, perda de rastreamento, controle desconectado ou fim da sessão devolvem a caixa à origem. Uma caixa já empilhada deve ser desempilhada pela prancheta antes de agarrar novamente.
+- Navegação é suspensa enquanto um gatilho está pressionado. Não é possível levantar uma caixa que sustenta outra. As colisões são verificadas por posição, sem dinâmica de massa/gravidade ou colisão contínua.
+
+O mapeamento usa [WebXR xr-standard](https://www.w3.org/TR/webxr-gamepads-module-1/): grip em buttons[1], analógico em axes[2:3], gatilho nos eventos selectstart/selectend. O rig comum e a prancheta usam [os espaços de controle do Three.js](https://threejs.org/docs/pages/WebXRManager.html).
+
+Validação automática inclui navegação com um/dois grips, zona morta, transporte/rotação sem escala, travamento/destravamento e soltura com encaixe/rejeição. Teste físico no Quest 2 ainda necessário para confirmar ergonomia da prancheta, orientação dos controles e limiares dos gestos (30–40 mm).
