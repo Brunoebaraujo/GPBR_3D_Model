@@ -38,6 +38,18 @@ export function fitsStack(top: Assembly, base: Assembly): boolean {
     used.add(i); return true;
   });
 }
+// Assisted capture: all four feet must enter the same base's capture zone.
+export function captureStackPose(top: Assembly, base: Assembly): Pose | null {
+  if (top.id === base.id || !ready(top) || !ready(base) || top.support !== null || base.support !== null || base.pose.y !== 0 || !Object.values(top.pose).every(Number.isFinite)) return null;
+  if (top.pose.y < MB6.h - .04 || top.pose.y > MB6.h + .12) return null;
+  if (Math.abs(Math.sin(top.pose.yaw - base.pose.yaw)) > Math.sin(Math.PI / 36)) return null;
+  const used = new Set<number>(), sockets = cornerPoints(base.pose);
+  if (!cornerPoints(top.pose).every(foot => {
+    const i = sockets.findIndex((socket,index) => !used.has(index) && Math.hypot(foot.x-socket.x,foot.z-socket.z) <= .075);
+    if (i < 0) return false; used.add(i); return true;
+  })) return null;
+  return { ...base.pose, y: MB6.h, yaw: base.pose.yaw + (Math.cos(top.pose.yaw-base.pose.yaw)<0 ? Math.PI : 0) };
+}
 export function reduceLab(state: Lab, action: Action): Lab {
   if (action.type === 'reset') return initialLab();
   if (action.type === 'select') return state.boxes.some(b => b.id === action.id) ? { ...state, selected: action.id } : state;
@@ -96,14 +108,15 @@ export function reduceLab(state: Lab, action: Action): Lab {
     if (!ready(b)) return fail('Monte, trave e tampe a caixa antes de segurá-la com as duas mãos.');
     const p = action.pose;
     if (!Object.values(p).every(Number.isFinite)) return fail('Posição inválida. A caixa voltou ao ponto de partida.');
-    const base = state.boxes.find(other => fitsStack({ ...b, pose: p }, other));
-    if (base) return reduceLab({ ...state, boxes: state.boxes.map(box => box.id === b.id ? { ...box, pose: p } : box) }, { type: 'stack' });
+    const snapped = state.boxes.map(other => captureStackPose({ ...b, pose: p }, other)).find(Boolean);
+    if (snapped) return reduceLab({ ...state, boxes: state.boxes.map(box => box.id === b.id ? { ...box, pose: snapped } : box) }, { type: 'stack' });
     if (Math.abs(p.y) <= 0.08) return reduceLab(state, { type: 'move', pose: { ...p, y: 0 } });
     return fail('Sem apoio válido: alinhe os quatro pés à outra caixa ou solte perto do piso. Caixa devolvida à origem.');
   }
   if (action.type === 'move') {
     const p = action.pose;
     if (!Object.values(p).every(Number.isFinite) || Math.abs(p.x) > 3 || Math.abs(p.z) > 3 || p.y < 0 || p.y > 2.5) return fail('Mantenha a caixa dentro da área de trabalho.');
+    if (state.boxes.some(other => captureStackPose({ ...b, pose: p }, other))) return reduceLab(state, { type: 'drop', pose: p });
     // Conservative swept-free endpoint envelope. Raised placement is a preview, never a supported stack.
     const ex = Math.abs(Math.cos(p.yaw)) * MB6.w / 2 + Math.abs(Math.sin(p.yaw)) * MB6.d / 2;
     const ez = Math.abs(Math.sin(p.yaw)) * MB6.w / 2 + Math.abs(Math.cos(p.yaw)) * MB6.d / 2;

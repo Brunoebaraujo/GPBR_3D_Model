@@ -449,14 +449,14 @@ try {
     assert.equal(s.boxes.length, 2);
     assert.ok(Math.abs(s.boxes[0].pose.x - s.boxes[1].pose.x) > (MB6.w + MB6.d) / (2 * Math.sqrt(2)) + MB6.w / 2);
   });
-  const { navigationInput, canGrabBox, grabbedPose, leverMotion, navigateRig } = await load('utils/xrInteraction.js');
+  const { navigationInput, canGrabBox, grabbedPose, leverMotion, navigateRig, gripHeld, heldBoxInput, wallPullAngle, wallPullComplete } = await load('utils/xrInteraction.js');
   const pad = (grip, x = 0, y = 0, mapping = 'xr-standard') => ({ mapping, buttons: [{ pressed: false, value: 0 }, { pressed: grip, value: grip ? 1 : 0 }], axes: [0,0,x,y] });
   test('XR right stick walks, left stick turns, without grips or controller index assumptions', () => {
     const right=navigationInput({left:null,right:pad(false,1,-1)},.02);
     assert.equal(right.turn,0); assert.ok(right.strafe>0); assert.ok(right.forward>0);
     assert.ok(Math.abs(Math.hypot(right.strafe,right.forward)-.024)<1e-12);
     const left=navigationInput({right:null,left:pad(false,1,-1)},.02);
-    assert.ok(left.turn>0); assert.equal(left.strafe,0); assert.equal(left.forward,0);
+    assert.ok(left.turn>0); assert.equal(left.strafe,0); assert.ok(left.forward>0);
     assert.deepEqual(navigationInput({left:pad(false,.1,0),right:pad(false,.1,NaN)},.02),{turn:0,strafe:0,forward:0});
     assert.deepEqual(navigationInput({left:pad(false,1,1,''),right:null},.02),{turn:0,strafe:0,forward:0});
     assert.deepEqual(navigationInput({left:pad(true,1,0),right:pad(true,0,-1)},.02),navigationInput({left:pad(false,1,0),right:pad(false,0,-1)},.02));
@@ -525,6 +525,37 @@ try {
       }
       assert.equal(s.boxes[0].locks[0],direction===1);
     }
+  });
+  test('XR redundant forward axes do not double walking speed and left grip gates clipboard', () => {
+    const one=navigationInput({left:pad(false,0,-1),right:null},.02);
+    assert.deepEqual(navigationInput({left:pad(false,0,-1),right:pad(false,0,-1)},.02),one);
+    assert.equal(gripHeld(pad(false)),false); assert.equal(gripHeld(pad(true)),true); assert.equal(gripHeld(null),false);
+    assert.equal(gripHeld(pad(true,0,0,'')),false);
+  });
+  test('XR lift assist reaches stacking height without overhead reach; sticks provide additional lift', () => {
+    const origin={x:0,y:0,z:0,yaw:0}, start=[{x:-.3,y:1,z:0},{x:.3,y:1,z:0}];
+    const lifted=grabbedPose(origin,start,start.map(p=>({...p,y:1.6})),2);
+    assert.ok(lifted.y>MB6.h);
+    const input=heldBoxInput({left:pad(false,1,-1),right:pad(false,0,-1)},.05);
+    assert.ok(input.lift>0); assert.ok(input.forward>0); assert.ok(input.turn>0);
+    assert.ok(heldBoxInput({left:null,right:pad(false,0,1)},.05).lift<0);
+  });
+  test('XR four-foot capture commits immediately and remains seated after trigger release or further movement', () => {
+    const s=assemble(reduceLab(assemble(initialLab()),{type:'add'})), base=s.boxes[0];
+    const captured=reduceLab(s,{type:'move',pose:{...base.pose,x:base.pose.x+.06,y:MB6.h+.08}});
+    assert.equal(captured.boxes[1].support,base.id); assert.equal(captured.boxes[1].pose.y,MB6.h-MB6.pin);
+    assert.deepEqual(captured.boxes[0],base);
+    assert.deepEqual(reduceLab(captured,{type:'drop',pose:s.boxes[1].pose}).boxes,captured.boxes);
+    assert.deepEqual(reduceLab(captured,{type:'move',pose:s.boxes[1].pose}).boxes,captured.boxes);
+    for(const pose of [{...base.pose,x:base.pose.x+.2,y:MB6.h},{...base.pose,y:MB6.h,yaw:Math.PI/2},{...base.pose,y:.7}]) assert.deepEqual(reduceLab(s,{type:'drop',pose}).boxes,s.boxes);
+  });
+  test('XR wall hold requires a full hinge pull; clicks and partial pulls never complete', () => {
+    const folded=-Math.PI/2;
+    assert.equal(wallPullComplete(wallPullAngle(folded,.5,{x:0,y:0,z:0}),true),false);
+    assert.equal(wallPullComplete(wallPullAngle(folded,.5,{x:0,y:.1,z:.1}),true),false);
+    assert.equal(wallPullComplete(wallPullAngle(folded,.5,{x:0,y:.5,z:.5}),true),true);
+    assert.equal(wallPullComplete(wallPullAngle(0,.5,{x:0,y:-.5,z:-.5}),false),true);
+    assert.equal(wallPullComplete(wallPullAngle(0,.5,{x:1,y:0,z:0}),false),false);
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }

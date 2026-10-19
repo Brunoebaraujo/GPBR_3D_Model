@@ -86,7 +86,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
   const location: Vec = index === 0 ? [0, pivot, MB6.d / 2 - 0.025] : index === 1 ? [MB6.w / 2 - 0.025, pivot, 0] : index === 2 ? [0, pivot, -MB6.d / 2 + 0.025] : [-MB6.w / 2 + 0.025, pivot, 0];
   const height = MB6.h - 0.035 - location[1];
   const gesture = useGesture(interaction, `${raised ? 'Dobrar' : 'Levantar'} parede: clique ou arraste ${raised ? 'para baixo' : 'para cima'}.`, () => act({ type: 'wall', index }), (_, dy) => { if ((dy < -6 && !raised) || (dy > 6 && raised)) act({ type: 'wall', index }); });
-  useFrame((_, dt) => { if (ref.current) ref.current.rotation.x += ((raised ? 0 : -Math.PI / 2) - ref.current.rotation.x) * Math.min(1, dt * 9); });
+  useFrame((_, dt) => { if (ref.current && !ref.current.userData.xrHeld) ref.current.rotation.x += ((raised ? 0 : -Math.PI / 2) - ref.current.rotation.x) * Math.min(1, dt * 9); });
   return <group position={location} rotation={[0, [0, Math.PI / 2, Math.PI, -Math.PI / 2][index], 0]}>
     <Part position={[0, (0.07 - pivot) / 2, 0]} size={[width - 0.09, pivot - 0.07, 0.014]} />
     {/* Fixed U sockets capture the rotating lower rail. */}
@@ -94,7 +94,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
       {[-1, 1].map(cheek => <Part key={cheek} position={[cheek * 0.018, (0.07 - pivot) / 2, 0]} size={[0.009, pivot - 0.07 + 0.04, 0.044]} color="#d5dce0" />)}
       <mesh rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.009, 0.009, 0.052, 16]} /><meshStandardMaterial color="#607783" metalness={0.7} roughness={0.3} /></mesh>
     </group>)}
-    <group ref={ref} rotation={[-Math.PI / 2, 0, 0]}>
+    <group ref={ref} rotation={[-Math.PI / 2, 0, 0]} userData={{ xrWall: { boxId: box.id, index } }}>
       {[-1, 1].map(side => <Part key={side} position={[side * (width / 2 - 0.035), 0.013, 0]} size={[0.024, 0.04, 0.014]} />)}
       <group {...gesture.events} userData={{ activate: () => act({ type: 'wall', index }) }}>
         <WallNumber number={index + 1} height={height} />

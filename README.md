@@ -339,10 +339,7 @@ ainda é necessário desenho dimensionado ou fotos detalhadas com escala.
 
 ### VR e verificações
 
-WebXR requer HTTPS/localhost e headset/navegador compatíveis. Todos os comandos
-ficam no painel fixo à esquerda da posição inicial, com três páginas. O raio de
-qualquer controle aciona seus botões. Não há rastreamento de mãos sem controles.
-A sessão imersiva e ergonomia ainda precisam de teste em headset físico.
+WebXR requer HTTPS/localhost e headset/navegador compatíveis. A prancheta aparece enquanto o grip esquerdo estiver segurado. Selecione com o raio direito ou com o analógico direito e confirme com o gatilho direito. Não há rastreamento de mãos sem controles. A ergonomia precisa de teste em headset físico.
 
 Testes de regressão cobrem montagem, alavanca em etapas, ferrolho retendo paredes,
 fechamento, independência das caixas, colisão, apoio e inserção dos pinos. O fluxo
@@ -358,13 +355,13 @@ As imagens fornecidas orientam os encaixes inferiores em U, linguetas articulada
 
 ### Quest 2: navegação e agarramento
 
-- Analógico direito anda para frente/trás e lateralmente, seguindo a direção horizontal do olhar (1,2 m/s). Analógico esquerdo vira no próprio eixo (1,1 rad/s), preservando a posição da cabeça mesmo com deslocamento físico no ambiente. Não exige grips; a zona morta evita deriva e andar na diagonal não aumenta a velocidade.
-- O painel fica fixo no cenário à esquerda da entrada, voltado para a área de trabalho. Não acompanha a mão nem o olhar; pode ser acionado com o gatilho de qualquer controle.
-- Mire no ferrolho com qualquer controle e mantenha o gatilho. Levante a mão ou puxe a alça, deslize na direção do ferrolho e rebata para concluir. Na abertura, o sentido do deslizamento se inverte. Soltar entre etapas mantém o estado mecânico e permite retomar.
-- Com tampa e quatro travas fechadas, mire no corpo da mesma caixa com ambas as mãos e mantenha os dois gatilhos. O ponto médio das mãos transporta a caixa; girar as mãos na horizontal muda sua orientação, mantendo-a vertical e sem redimensioná-la. Soltar qualquer gatilho tenta apoiar.
-- Os quatro pés precisam corresponder aos vértices da base pronta (tolerância existente de 35 mm). No piso, a soltura aceita até 80 mm de altura. Soltura sem apoio, perda de rastreamento, controle desconectado ou fim da sessão devolvem a caixa à origem. Uma caixa já empilhada deve ser desempilhada pelo painel antes de agarrar novamente.
-- Navegação é suspensa enquanto um gatilho está pressionado. Não é possível levantar uma caixa que sustenta outra. As colisões são verificadas por posição, sem dinâmica de massa/gravidade ou colisão contínua.
+- Analógico direito: andar e deslocar lateralmente. Esquerdo: virar e também avançar/recuar. Os dois avanços não somam velocidade. Movimento acompanha a direção horizontal do olhar.
+- Segure o grip esquerdo para mostrar a prancheta na mão esquerda. Use o raio direito e gatilho, ou navegue com o analógico direito para cima/baixo e confirme com o gatilho. Solte o grip para ocultar.
+- Paredes: mire, segure o gatilho e puxe até completar o arco da dobradiça. Soltar antes devolve a parede. A ordem Frente, Fundo, Esquerda, Direita continua obrigatória.
+- Ferrolhos: mire e mantenha o gatilho; levante, deslize e rebata. Soltar entre etapas preserva o estado mecânico.
+- Caixa montada e tampada: mire com as duas mãos e segure ambos os gatilhos. Elevação física tem ganho de 2x. Enquanto segura, o analógico direito sobe/desce ou desloca lateralmente; o esquerdo aproxima/afasta e gira.
+- Os quatro pés próximos aos apoios capturam automaticamente (75 mm, até 5 graus de orientação e altura de -40 a +120 mm em relação ao topo). A caixa centraliza, assenta e permanece travada, com click sonoro e vibração quando disponíveis. São tolerâncias didáticas, não cotas de fabricação.
+- Soltar perto do piso apoia a caixa. Sem apoio válido ou com rastreamento perdido, retorna à origem. Use Desempilhar antes de levantar uma caixa encaixada. Não é possível levantar a base que sustenta outra.
+- Navegação fica suspensa durante manipulação e uso da prancheta. Colisões são verificadas por posição, sem dinâmica de massa ou colisão contínua.
 
-O mapeamento usa [WebXR xr-standard](https://www.w3.org/TR/webxr-gamepads-module-1/): mão identificada por handedness, analógico em axes[2:3], gatilho nos eventos selectstart/selectend. O rig comum e os controles usam [os espaços de controle do Three.js](https://threejs.org/docs/pages/WebXRManager.html).
-
-Validação automática inclui movimento direito/giro esquerdo, pivô na cabeça, direção do olhar, zona morta, transporte/rotação sem escala, travamento/destravamento e soltura com encaixe/rejeição. Teste físico no Quest 2 ainda necessário para confirmar ergonomia do painel, orientação dos controles e limiares dos gestos (30–40 mm).
+Os 60 testes automatizados cobrem regras de montagem, navegação, alcance, captura persistente e movimento de paredes. Sessão imersiva, ergonomia e feedback sensorial ainda precisam de validação em Quest 2 físico.
