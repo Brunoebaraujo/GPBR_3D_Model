@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
+import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer } from 'three';
 import { fitsStack, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
 import { canGrabBox, grabbedPose, leverMotion, navigationInput, navigateRig, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
@@ -10,7 +10,7 @@ type Target = { object: Object3D; boxId?: number; lever?: LeverTarget; activate?
 type Hand = { source: XRInputSource | null; down: boolean; target: Target | null; anchor: Vector3; phase: LeverPhase; slideDirection: number; tracked: boolean };
 type Grab = { id: number; object: Object3D; origin: Pose; start: [Point3, Point3]; candidate: Pose };
 
-// One rig moves the headset, both controllers and the clipboard together.
+// The viewer and controllers share a rig; the action panel stays in the scene.
 export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint, children }: Props) {
   const { gl, scene, camera } = useThree();
   const latest = useRef({ lab, dispatch, onHint }); latest.current = { lab, dispatch, onHint };
@@ -57,8 +57,6 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           if (typeof p.userData.xrBoxId === 'number') { boxId = p.userData.xrBoxId; if (!lever) object = p; }
           if (p.userData.xrPanel) panel = true;
         }
-        // The left ray cannot click through its own wrist panel.
-        if (panel && hands[i].source?.handedness === 'left') continue;
         if (panel || boxId !== undefined || activate) return { object, boxId, lever, activate, panel };
       }
       return null;
@@ -92,7 +90,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         return;
       }
       // Never remove a completed box's lid when an attempted grab is blocked.
-      if (b?.support !== null && b?.support !== undefined) { hint('Use Desempilhar na prancheta antes de levantar a caixa.'); return; }
+      if (b?.support !== null && b?.support !== undefined) { hint('Use Desempilhar no painel antes de levantar a caixa.'); return; }
       if (b && latest.current.lab.boxes.some(other => other.support === b.id)) { hint('Desempilhe a caixa superior primeiro.'); return; }
       target.activate?.();
     };
@@ -114,7 +112,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       if (camera instanceof PerspectiveCamera) saved.fov = camera.fov;
       rig.add(camera); camera.position.set(0, 0, 0); camera.quaternion.identity();
       gl.xr.getSession()?.addEventListener('visibilitychange', visibility); onPresenting(true);
-      hint('Prancheta na mão esquerda. Grip + analógico: visão; dois grips: aproximar/afastar.');
+      hint('Painel à esquerda da entrada. Analógico direito: andar; esquerdo: virar no próprio eixo.');
     };
     const end = () => {
       clear(true); if (board.current) board.current.visible = false;
@@ -138,21 +136,16 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         beams[i].beam.material.color.set(h.down ? '#ffcd5c' : '#42e8cc');
       });
       if (!hands.some(h => h.down || h.source?.gamepad?.buttons[0]?.pressed)) {
-        const nav = navigationInput(hands.map(h => h.tracked ? h.source?.gamepad ?? null : null), dt);
-        const box = latest.current.lab.boxes.find(b => b.id === latest.current.lab.selected)!;
-        const next = navigateRig({ x: rig.position.x, y: rig.position.y, z: rig.position.z, yaw: rig.rotation.y }, viewer.transform.position, box.pose, nav);
+        const pad = (side: XRHandedness) => hands.find(h => h.tracked && h.source?.handedness === side)?.source?.gamepad ?? null;
+        const nav = navigationInput({ left: pad('left'), right: pad('right') }, dt);
+        const orientation = viewer.transform.orientation;
+        const forward = new Vector3(0, 0, -1).applyQuaternion(new Quaternion(orientation.x, orientation.y, orientation.z, orientation.w));
+        const headYaw = Math.atan2(-forward.x, -forward.z);
+        const next = navigateRig({ x: rig.position.x, y: rig.position.y, z: rig.position.z, yaw: rig.rotation.y }, viewer.transform.position, headYaw, nav);
         rig.position.set(next.x, next.y, next.z); rig.rotation.y = next.yaw;
         rig.updateMatrixWorld(true);
       }
-      const left = hands.findIndex(h => h.source?.handedness === 'left' && h.tracked);
-      if (board.current) {
-        board.current.visible = left >= 0 && !grab && !hands.some(h => h.down && h.target?.boxId !== undefined);
-        if (left >= 0) {
-          grips[left].updateWorldMatrix(true, false);
-          board.current.position.copy(grips[left].localToWorld(new Vector3(0, 0.25, -0.12)));
-          board.current.quaternion.copy(grips[left].getWorldQuaternion(new Quaternion())).multiply(new Quaternion().setFromEuler(new Euler(-0.45, 0, 0)));
-        }
-      }
+      if (board.current) board.current.visible = true;
       if (grab) {
         const held = grab, b = latest.current.lab.boxes.find(b => b.id === held.id);
         if (!b || !canGrabBox(latest.current.lab, b)) { clear(true); return; }
@@ -189,5 +182,5 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       scene.remove(rig); onRenderer(null);
     };
   }, [gl, scene, camera, onRenderer, onPresenting]);
-  return <group ref={board} visible={false} userData={{ xrPanel: true }}>{children}</group>;
+  return <group ref={board} visible={false} position={[-2, 1.45, 2.5]} rotation={[0, Math.PI / 2, 0]} scale={2} userData={{ xrPanel: true }}>{children}</group>;
 }

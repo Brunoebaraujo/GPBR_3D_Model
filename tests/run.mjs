@@ -451,28 +451,31 @@ try {
   });
   const { navigationInput, canGrabBox, grabbedPose, leverMotion, navigateRig } = await load('utils/xrInteraction.js');
   const pad = (grip, x = 0, y = 0, mapping = 'xr-standard') => ({ mapping, buttons: [{ pressed: false, value: 0 }, { pressed: grip, value: grip ? 1 : 0 }], axes: [0,0,x,y] });
-  test('XR grips gate locomotion, ignore drift and reserve dual grip for dolly', () => {
-    assert.deepEqual(navigationInput([pad(false, 1, 1)], .016), { orbit: 0, elevation: 0, dolly: 0 });
-    assert.deepEqual(navigationInput([pad(true, .1, -.1)], .016), { orbit: 0, elevation: 0, dolly: 0 });
-    assert.ok(navigationInput([pad(true, 1, -1)], .016).orbit > 0);
-    assert.ok(navigationInput([pad(true, 1, -1)], .016).elevation > 0);
-    const both = navigationInput([pad(true, 1, 0),pad(true, 0, -1)], .016);
-    assert.equal(both.orbit, 0); assert.equal(both.elevation, 0); assert.ok(both.dolly < 0);
-    assert.equal(navigationInput([pad(true,1,1,'')], .016).orbit, 0);
-    assert.equal(navigationInput([null, pad(true,0,NaN)], .016).dolly, 0);
-    assert.ok(Math.abs(navigationInput([pad(true,1,0)], 10).orbit - .04) < 1e-12);
+  test('XR right stick walks, left stick turns, without grips or controller index assumptions', () => {
+    const right=navigationInput({left:null,right:pad(false,1,-1)},.02);
+    assert.equal(right.turn,0); assert.ok(right.strafe>0); assert.ok(right.forward>0);
+    assert.ok(Math.abs(Math.hypot(right.strafe,right.forward)-.024)<1e-12);
+    const left=navigationInput({right:null,left:pad(false,1,-1)},.02);
+    assert.ok(left.turn>0); assert.equal(left.strafe,0); assert.equal(left.forward,0);
+    assert.deepEqual(navigationInput({left:pad(false,.1,0),right:pad(false,.1,NaN)},.02),{turn:0,strafe:0,forward:0});
+    assert.deepEqual(navigationInput({left:pad(false,1,1,''),right:null},.02),{turn:0,strafe:0,forward:0});
+    assert.deepEqual(navigationInput({left:pad(true,1,0),right:pad(true,0,-1)},.02),navigationInput({left:pad(false,1,0),right:pad(false,0,-1)},.02));
+    assert.equal(navigationInput({left:null,right:pad(false,0,-1)},10).forward,.06);
   });
-  test('XR navigation preserves headset room offset and orbits around selected crate', () => {
-    const rig={x:0,y:0,z:3,yaw:0}, viewer={x:.3,y:1.7,z:.2}, center={x:-.8,y:0,z:0};
-    const nav={orbit:.5,elevation:0,dolly:0};
-    const next=navigateRig(rig,viewer,center,nav);
-    const before=Math.hypot(rig.x+viewer.x-center.x,rig.z+viewer.z-center.z);
-    const eye={x:next.x+viewer.x*Math.cos(next.yaw)+viewer.z*Math.sin(next.yaw),z:next.z-viewer.x*Math.sin(next.yaw)+viewer.z*Math.cos(next.yaw)};
-    assert.ok(Math.abs(Math.hypot(eye.x-center.x,eye.z-center.z)-before)<1e-12);
-    assert.equal(next.yaw,-.5); assert.equal(next.y,0);
-    const inward=navigateRig(rig,{x:0,y:1.7,z:0},{x:0,y:0,z:0},{orbit:0,elevation:0,dolly:-10});
-    assert.equal(inward.z,.85);
-    assert.equal(navigateRig(rig,viewer,center,{orbit:0,elevation:20,dolly:0}).y,1.5);
+  test('XR turns about the headset without orbiting the crate or changing eye position', () => {
+    const rig={x:1,y:.2,z:3,yaw:.4}, viewer={x:.3,y:1.7,z:.2};
+    const next=navigateRig(rig,viewer,.2,{turn:.5,strafe:0,forward:0});
+    const eye=p=>({x:p.x+viewer.x*Math.cos(p.yaw)+viewer.z*Math.sin(p.yaw),z:p.z-viewer.x*Math.sin(p.yaw)+viewer.z*Math.cos(p.yaw)});
+    assert.ok(Math.abs(eye(next).x-eye(rig).x)<1e-12); assert.ok(Math.abs(eye(next).z-eye(rig).z)<1e-12);
+    assert.ok(Math.abs(next.yaw+.1)<1e-12); assert.equal(next.y,rig.y);
+  });
+  test('XR walking follows horizontal head direction and preserves floor height', () => {
+    const rig={x:0,y:0,z:3,yaw:0}, viewer={x:0,y:1.7,z:0};
+    assert.deepEqual(navigateRig(rig,viewer,0,{turn:0,strafe:0,forward:1}),{...rig,z:2});
+    assert.deepEqual(navigateRig(rig,viewer,0,{turn:0,strafe:1,forward:0}),{...rig,x:1});
+    assert.deepEqual(navigateRig(rig,viewer,0,{turn:0,strafe:0,forward:-1}),{...rig,z:4});
+    const left=navigateRig(rig,viewer,Math.PI/2,{turn:0,strafe:0,forward:1});
+    assert.ok(Math.abs(left.x+1)<1e-12); assert.equal(left.y,0); assert.equal(left.z,3);
   });
   test('XR grab translates and rotates about both hands without scaling or tilting', () => {
     const origin = { x:0, y:0, z:-1, yaw:0 };
