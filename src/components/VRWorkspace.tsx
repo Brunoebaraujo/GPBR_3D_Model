@@ -126,7 +126,6 @@ export function VRWorkspace() {
         {lab.boxes.map(b => <Crate key={b.id} box={b} selected={b.id === selected.id} tool={module === 'desktop' ? tool : 'assemble'} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onPose={onPose} interaction={{ enabled: module === 'desktop' && tool === 'assemble', busy: setDragging, hint: setHint }} />)}
         <XRInteraction lab={lab} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onRenderer={setRenderer} onPresenting={setPresenting} onHint={setHint}>
           <mesh position={[0, 0, -0.012]}><boxGeometry args={[0.46, 0.64, 0.018]} /><meshStandardMaterial color="#203541" roughness={0.8} /></mesh>
-          <mesh position={[0, 0.32, 0]}><boxGeometry args={[0.16, 0.035, 0.025]} /><meshStandardMaterial color="#aebcc4" metalness={0.7} roughness={0.3} /></mesh>
           <Label text={`MB6 · Caixa ${selected.id} · ${selected.walls.filter(Boolean).length}/4 paredes · ${selected.locks.filter(Boolean).length}/4 travas`} position={[0, 0.27, 0.002]} width={0.42} />
           <Label text={page === 0 ? 'MONTAGEM' : page === 1 ? 'TRAVAS E CAIXAS' : 'POSIÇÃO E ENCAIXE'} position={[0, 0.215, 0.002]} width={0.42} />
           {actions.slice(page * 6, page * 6 + 6).map((action, i) => <Label key={action.label} text={action.label} position={[-0.108 + (i % 2) * 0.216, 0.15 - Math.floor(i / 2) * 0.06, 0.002]} action={action.run} width={0.2} />)}

@@ -57,8 +57,6 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           if (typeof p.userData.xrBoxId === 'number') { boxId = p.userData.xrBoxId; if (!lever) object = p; }
           if (p.userData.xrPanel) panel = true;
         }
-        // The left ray cannot click through its own wrist panel.
-        if (panel && hands[i].source?.handedness === 'left') continue;
         if (panel || boxId !== undefined || activate) return { object, boxId, lever, activate, panel };
       }
       return null;
