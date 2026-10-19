@@ -8,7 +8,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import './vr.css';
 
 type Vec = [number, number, number];
-type ViewRequest = { kind: 'front' | 'back' | 'overview'; pose: Pose };
+type ViewRequest = { kind: 'front' | 'back' | 'overview' | 'corner'; pose: Pose; corner?: number };
 function CameraView({ request, presenting }: { request: ViewRequest | null; presenting: boolean }) {
   const { camera, controls } = useThree();
   useEffect(() => {
@@ -18,7 +18,9 @@ function CameraView({ request, presenting }: { request: ViewRequest | null; pres
     if (kind === 'overview') { camera.position.set(3.4, 2.9, 5.3); orbit.target.set(0, 0.8, 0); }
     else {
       const direction = kind === 'front' ? 1 : -1;
-      const dx = direction * 0.2, dz = direction * 2.6;
+      const c = request.corner ?? 0;
+      const dx = kind === 'corner' ? ([1, 1, -1, -1][c] * 1.8) : direction * 0.2;
+      const dz = kind === 'corner' ? ([1, -1, -1, 1][c] * 2.2) : direction * 2.6;
       camera.position.set(pose.x + dx * Math.cos(pose.yaw) + dz * Math.sin(pose.yaw), pose.y + 1.25, pose.z - dx * Math.sin(pose.yaw) + dz * Math.cos(pose.yaw));
       orbit.target.set(pose.x, pose.y + 0.7, pose.z); orbit.update();
     }
@@ -108,6 +110,10 @@ export function VRWorkspace() {
     dispatch({ type: 'select', id }); dispatch({ type: 'move', pose });
     return next.boxes.find(b => b.id === id)!.pose;
   };
+  const chooseCorner = (index: number) => {
+    setCorner(index);
+    setView({ kind: 'corner', corner: index, pose: { ...selected.pose } });
+  };
   const lever = (step: LeverStep) => dispatch({ type: 'lever', index: corner, step });
   const actions = [
     { label: selected.lid ? 'Retirar tampa' : 'Colocar tampa', run: () => dispatch({ type: 'lid' }) },
@@ -115,7 +121,7 @@ export function VRWorkspace() {
     { label: `Alavanca ${corner + 1}: levantar`, run: () => lever('lift') },
     { label: `Alavanca ${corner + 1}: deslizar`, run: () => lever('slide') },
     { label: `Alavanca ${corner + 1}: rebater`, run: () => lever('lower') },
-    { label: `Trocar vértice (${corner + 1}/4)`, run: () => setCorner(i => (i + 1) % 4) },
+    { label: `Trocar vértice (${corner + 1}/4)`, run: () => chooseCorner((corner + 1) % 4) },
     { label: 'Criar segunda caixa', run: () => dispatch({ type: 'add' }) },
     { label: 'Elevar para empilhar', run: () => dispatch({ type: 'move', pose: { ...selected.pose, y: MB6.h } }) },
     { label: 'Aproximar da outra caixa', run: () => { const other = lab.boxes.find(b => b.id !== selected.id); if (other) dispatch({ type: 'move', pose: { ...selected.pose, x: other.pose.x + 0.06, z: other.pose.z } }); } },
@@ -130,7 +136,7 @@ export function VRWorkspace() {
       <div className="vr-row">{lab.boxes.map(b => <button key={b.id} aria-pressed={selected.id === b.id} onClick={() => dispatch({ type: 'select', id: b.id })}>Caixa {b.id}</button>)}</div>
       {module === 'desktop' && <div className="vr-tools" aria-label="Vistas da caixa">{([['front', 'Ver frente'], ['back', 'Ver fundo'], ['overview', 'Visão geral']] as const).map(([kind, label]) => <button key={kind} onClick={() => setView({ kind, pose: { ...selected.pose } })}>{label}</button>)}</div>}
       <p>{selected.walls.filter(Boolean).length}/4 paredes · {selected.locks.filter(Boolean).length}/4 travas · {selected.support ? 'Empilhada' : ready(selected) ? 'Pronta' : 'Em montagem'}<br />Rotação: {Math.round(selected.pose.yaw * 180 / Math.PI)}°</p>
-      <div className="vr-corners" aria-label="Vértices">{selected.locks.map((locked, i) => <button key={i} aria-pressed={corner === i} onClick={() => setCorner(i)}>V{i + 1} · {locked ? 'travado' : selected.leverRaised[i] ? 'alça aberta' : 'livre'}</button>)}</div>
+      <div className="vr-corners" aria-label="Vértices">{selected.locks.map((locked, i) => <button key={i} aria-pressed={corner === i} onClick={() => chooseCorner(i)}>V{i + 1} · {locked ? 'travado' : selected.leverRaised[i] ? 'alça aberta' : 'livre'}</button>)}</div>
       <p className="vr-lever-guide">Alavanca {corner + 1}: <strong>1. Levantar → 2. Deslizar → 3. Rebater</strong><br />Para destravar, repita as três etapas recolhendo o ferrolho.</p>
       <p>Montagem: Frente → Fundo → Esquerda → Direita.<br />Desmontagem na ordem inversa. Recolhida, de baixo para cima: Direita → Esquerda → Fundo → Frente → Tampa.</p>
       <details open><summary>Comandos de apoio</summary><div className="vr-actions">{actions.map(a => <button key={a.label} onClick={a.run}>{a.label}</button>)}</div></details>
