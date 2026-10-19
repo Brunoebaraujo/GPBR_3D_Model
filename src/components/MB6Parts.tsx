@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Edges, TransformControls } from '@react-three/drei';
-import { Group, Vector3 } from 'three';
+import { CanvasTexture, Group, Vector3 } from 'three';
 import { MB6, WALL_PIVOT_Y, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
 
 type Vec = [number, number, number];
@@ -38,6 +38,19 @@ function useGesture(interaction: Interaction, hint: string, tap: () => void, dra
 
 function Part({ position, size, color = '#b8c5cd', highlight = false }: { position: Vec; size: Vec; color?: string; highlight?: boolean }) {
   return <mesh position={position}><boxGeometry args={size} /><meshStandardMaterial color={color} emissive={highlight ? '#26bba5' : '#000000'} emissiveIntensity={0.3} metalness={0.55} roughness={0.38} /><Edges color="#465564" /></mesh>;
+}
+
+function WallNumber({ number, height }: { number: number; height: number }) {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#163747'; ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 190px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(number), 128, 140);
+    return new CanvasTexture(canvas);
+  }, [number]);
+  useEffect(() => () => texture.dispose(), [texture]);
+  return <mesh position={[0.18, height * 0.68, 0.016]}><planeGeometry args={[0.19, 0.19]} /><meshBasicMaterial map={texture} toneMapped={false} /></mesh>;
 }
 
 function Lever({ index, box, x, height, act, interaction, direction }: { index: number; box: Assembly; x: number; height: number; act: (a: Action) => void; interaction: Interaction; direction: number }) {
@@ -84,6 +97,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
     <group ref={ref} rotation={[-Math.PI / 2, 0, 0]}>
       {[-1, 1].map(side => <Part key={side} position={[side * (width / 2 - 0.035), 0.013, 0]} size={[0.024, 0.04, 0.014]} />)}
       <group {...gesture.events} userData={{ activate: () => act({ type: 'wall', index }) }}>
+        <WallNumber number={index + 1} height={height} />
         <Part position={[0, height / 2, 0]} size={[width, height, 0.012]} highlight={gesture.hovered} />
         {[-1, 0, 1].map(x => <Part key={x} position={[x * (width / 2 - 0.025), height / 2, 0.008]} size={[0.025, height, 0.012]} highlight={gesture.hovered} />)}
         {[0, 0.5, 1].map(y => <Part key={y} position={[0, y * (height - 0.02), 0.008]} size={[width, 0.02, 0.012]} highlight={gesture.hovered} />)}
@@ -96,13 +110,16 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
 function Lid({ box, act, interaction }: { box: Assembly; act: (a: Action) => void; interaction: Interaction }) {
   const ref = useRef<Group>(null);
   const height = box.walls.some(Boolean) ? MB6.h - 0.035 : MB6.collapsed - 0.006;
+  // Keep the initial JSX transform stable: changing wall height must not teleport
+  // the removed lid back onto the crate before the next animation frame.
+  const [initialPosition] = useState<Vec>(() => [0, box.lid ? height : 0.025, box.lid ? 0 : 1.7]);
   const gesture = useGesture(interaction, 'Tampa: clique ou arraste para cima para retirar; para baixo para recolocar.', () => act({ type: 'lid' }), (_, dy) => { if ((dy < -6 && box.lid) || (dy > 6 && !box.lid)) act({ type: 'lid' }); });
   const target = useRef(new Vector3());
   useFrame((_, dt) => {
     target.current.set(0, box.lid ? height : 0.025, box.lid ? 0 : 1.7);
     ref.current?.position.lerp(target.current, Math.min(1, dt * 8));
   });
-  return <group ref={ref} position={[0, height, 0]} {...gesture.events} userData={{ activate: () => act({ type: 'lid' }) }}>
+  return <group ref={ref} position={initialPosition} {...gesture.events} userData={{ activate: () => act({ type: 'lid' }) }}>
     <Part position={[0, 0, 0]} size={[MB6.w - 0.12, 0.012, MB6.d - 0.12]} color="#dfe7eb" highlight={gesture.hovered} />
   </group>;
 }
