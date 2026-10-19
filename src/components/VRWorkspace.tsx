@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { BoxGeometry, CanvasTexture, Group, Matrix4, Mesh, MeshBasicMaterial, Raycaster, WebGLRenderer } from 'three';
+import { CanvasTexture, WebGLRenderer } from 'three';
 import { MB6, WALL_NAMES, ASSEMBLY_ORDER, initialLab, reduceLab, ready, type Pose, type LeverStep } from '../utils/mb6Assembly';
 import { Crate, type MouseTool } from './MB6Parts';
+import { XRInteraction } from './XRInteraction';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import './vr.css';
 
@@ -28,52 +29,23 @@ function CameraView({ request, presenting }: { request: ViewRequest | null; pres
   }, [camera, controls, request, presenting]);
   return null;
 }
-function Label({ text, position, action, width = 1.1, color = '#183747' }: { text: string; position: Vec; action?: () => void; width?: number; color?: string }) {
+function Label({ text, position, action, width = 1.1, height = 0.045, color = '#183747' }: { text: string; position: Vec; action?: () => void; width?: number; height?: number; color?: string }) {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 128;
     const ctx = canvas.getContext('2d')!; ctx.fillStyle = color; ctx.fillRect(0, 0, 1024, 128);
     ctx.fillStyle = '#ffffff'; ctx.font = '38px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(text, 512, 64, 990); return new CanvasTexture(canvas);
+    const lines: string[] = []; let line = '';
+    for (const word of text.split(' ')) {
+      const next = line ? line + ' ' + word : word;
+      if (ctx.measureText(next).width > 980 && line) { lines.push(line); line = word; } else line = next;
+    }
+    lines.push(line);
+    const size = Math.min(38, 112 / lines.length); ctx.font = size + 'px sans-serif';
+    lines.forEach((value, i) => ctx.fillText(value, 512, 64 + (i - (lines.length - 1) / 2) * size, 990));
+    return new CanvasTexture(canvas);
   }, [text, color]);
   useEffect(() => () => texture.dispose(), [texture]);
-  return <mesh position={position} userData={{ activate: action }} onClick={e => { e.stopPropagation(); action?.(); }}><planeGeometry args={[width, 0.13]} /><meshBasicMaterial map={texture} toneMapped={false} /></mesh>;
-}
-
-// Native WebXR controllers share the same commands and guards as pointer/keyboard UI.
-function XRBridge({ onRenderer, onPresenting }: { onRenderer: (gl: WebGLRenderer | null) => void; onPresenting: (v: boolean) => void }) {
-  const { gl, scene, camera } = useThree();
-  useEffect(() => {
-    gl.xr.enabled = true; gl.xr.setReferenceSpaceType('local-floor'); onRenderer(gl);
-    const ray = new Raycaster(), rotation = new Matrix4();
-    const cameraRig = new Group(); cameraRig.position.z = 3; scene.add(cameraRig); const originalParent = camera.parent;
-    const saved = { position: camera.position.clone(), quaternion: camera.quaternion.clone() };
-    const start = () => { saved.position.copy(camera.position); saved.quaternion.copy(camera.quaternion); cameraRig.add(camera); camera.position.set(0, 0, 0); camera.quaternion.identity(); onPresenting(true); };
-    const end = () => { cameraRig.remove(camera); originalParent?.add(camera); camera.position.copy(saved.position); camera.quaternion.copy(saved.quaternion); onPresenting(false); };
-    gl.xr.addEventListener('sessionstart', start); gl.xr.addEventListener('sessionend', end);
-    const controllers = [0, 1].map(i => {
-      const controller = gl.xr.getController(i);
-      // A world-space rig leaves the headset's floor origin in front of the workbench.
-      const rig = new Group(); rig.position.set(0, 0, 3); rig.add(controller); scene.add(rig);
-      const beam = new Mesh(new BoxGeometry(0.004, 0.004, 4), new MeshBasicMaterial({ color: '#42e8cc' })); beam.position.z = -2; controller.add(beam);
-      const select = () => {
-        controller.updateWorldMatrix(true, false); rotation.extractRotation(controller.matrixWorld);
-        ray.ray.origin.setFromMatrixPosition(controller.matrixWorld); ray.ray.direction.set(0, 0, -1).applyMatrix4(rotation);
-        for (const hit of ray.intersectObjects(scene.children, true)) {
-          let object: typeof hit.object | null = hit.object;
-          while (object && typeof object.userData.activate !== 'function') object = object.parent;
-          if (object) { object.userData.activate(); break; }
-        }
-      };
-      controller.addEventListener('select', select);
-      return { controller, rig, beam, select };
-    });
-    return () => {
-      void gl.xr.getSession()?.end(); end(); scene.remove(cameraRig); onRenderer(null);
-      gl.xr.removeEventListener('sessionstart', start); gl.xr.removeEventListener('sessionend', end);
-      controllers.forEach(({ controller, rig, beam, select }) => { controller.removeEventListener('select', select); controller.remove(beam); scene.remove(rig); beam.geometry.dispose(); beam.material.dispose(); });
-    };
-  }, [gl, scene, camera, onRenderer, onPresenting]);
-  return null;
+  return <mesh position={position} userData={{ activate: action }} onClick={e => { e.stopPropagation(); action?.(); }}><planeGeometry args={[width, height]} /><meshBasicMaterial map={texture} toneMapped={false} /></mesh>;
 }
 
 export function VRWorkspace() {
@@ -83,6 +55,7 @@ export function VRWorkspace() {
   const [dragging, setDragging] = useState(false);
   const [hint, setHint] = useState('Clique na tampa ou arraste-a para cima para começar.');
   const [corner, setCorner] = useState(0);
+  const [page, setPage] = useState(0);
   const [view, setView] = useState<ViewRequest | null>(null);
   const [renderer, setRenderer] = useState<WebGLRenderer | null>(null);
   const [presenting, setPresenting] = useState(false);
@@ -131,8 +104,8 @@ export function VRWorkspace() {
   ];
   return <main className="vr-lab">
     <aside className="vr-panel"><p className="vr-eyebrow">LOAD STUDIO · MONTAGEM</p><h1>Monte. Trave. Empilhe.</h1><p>MB6 · 1120 × 1220 × 1076 mm</p>
-      <div className="vr-module-choice" aria-label="Módulo de interação"><button aria-pressed={module === 'desktop'} onClick={() => { setModule('desktop'); setTool('assemble'); }}>Desktop · Mouse</button><button aria-pressed={module === 'vr'} onClick={() => { setModule('vr'); setTool('assemble'); }}>VR · Headset</button></div>
-      {module === 'vr' ? <><button className="vr-primary" disabled={!supported || !renderer || pending} onClick={() => void enter()}>{pending ? 'Conectando…' : 'Entrar em VR'}</button><small>{xrStatus}</small><p>Aponte o controle e aperte o gatilho. Use o painel 3D para levantar, deslizar e rebater cada alavanca.</p></> : <><h2>Manipular com o mouse</h2><div className="vr-tools">{([['assemble', 'Montar peças'], ['translate', 'Mover caixa'], ['rotate', 'Girar caixa']] as const).map(([value, label]) => <button key={value} aria-pressed={tool === value} onClick={() => { setTool(value); setDragging(false); }}>{label}</button>)}</div><p>{tool === 'assemble' ? 'Clique ou arraste tampa e paredes. Nas alavancas: arraste para cima, na horizontal e para baixo. Arraste o fundo para orbitar; role para aproximar.' : tool === 'translate' ? 'Selecione a caixa e arraste as setas: verde eleva, vermelho e azul alinham no piso. Ao soltar, posições inválidas retornam.' : 'Arraste o arco verde para girar a caixa. A rotação ocorre em passos de 5°.'}</p></>}
+      <div className="vr-module-choice" aria-label="Módulo de interação"><button aria-pressed={module === 'desktop'} onClick={() => { setModule('desktop'); setTool('assemble'); }}>Desktop · Mouse</button><button aria-pressed={module === 'vr'} onClick={() => { setModule('vr'); setTool('assemble'); setHint('No headset: prancheta na esquerda; grips para navegar e gatilhos para agarrar.'); }}>VR · Headset</button></div>
+      {module === 'vr' ? <><button className="vr-primary" disabled={!supported || !renderer || pending} onClick={() => void enter()}>{pending ? 'Conectando…' : 'Entrar em VR'}</button><small>{xrStatus}</small><p>Um grip + analógico: girar a visão e ajustar altura. Dois grips + analógico vertical: aproximar/afastar. A prancheta acompanha a mão esquerda; use o raio direito nos botões. Segure o gatilho sobre um ferrolho e mova a mão para levantar, deslizar e rebater. Para levantar uma caixa pronta, mire nela com as duas mãos e mantenha ambos os gatilhos. Solte um para apoiar.</p></> : <><h2>Manipular com o mouse</h2><div className="vr-tools">{([['assemble', 'Montar peças'], ['translate', 'Mover caixa'], ['rotate', 'Girar caixa']] as const).map(([value, label]) => <button key={value} aria-pressed={tool === value} onClick={() => { setTool(value); setDragging(false); }}>{label}</button>)}</div><p>{tool === 'assemble' ? 'Clique ou arraste tampa e paredes. Nas alavancas: arraste para cima, na horizontal e para baixo. Arraste o fundo para orbitar; role para aproximar.' : tool === 'translate' ? 'Selecione a caixa e arraste as setas: verde eleva, vermelho e azul alinham no piso. Ao soltar, posições inválidas retornam.' : 'Arraste o arco verde para girar a caixa. A rotação ocorre em passos de 5°.'}</p></>}
       <div className="vr-row">{lab.boxes.map(b => <button key={b.id} aria-pressed={selected.id === b.id} onClick={() => dispatch({ type: 'select', id: b.id })}>Caixa {b.id}</button>)}</div>
       {module === 'desktop' && <div className="vr-tools" aria-label="Vistas da caixa">{([['front', 'Ver frente'], ['back', 'Ver fundo'], ['overview', 'Visão geral']] as const).map(([kind, label]) => <button key={kind} onClick={() => setView({ kind, pose: { ...selected.pose } })}>{label}</button>)}</div>}
       <p>{selected.walls.filter(Boolean).length}/4 paredes · {selected.locks.filter(Boolean).length}/4 travas · {selected.support ? 'Empilhada' : ready(selected) ? 'Pronta' : 'Em montagem'}<br />Rotação: {Math.round(selected.pose.yaw * 180 / Math.PI)}°</p>
@@ -145,20 +118,25 @@ export function VRWorkspace() {
       <button onClick={() => dispatch({ type: 'reset' })}>Reiniciar laboratório</button>
       <p className="vr-note">Ficha conferida: recolhida 224 mm; tampa 10,6 kg. Alavancas reproduzem a sequência visual do vídeo. Cotas dos fechos e encaixes não constam na ficha e continuam aproximadas.</p>
     </aside>
-    <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status"><span className="vr-mode-label">{module === 'desktop' ? 'DESKTOP · MOUSE' : 'VR · HEADSET'}</span>{lab.message}</div><div className="vr-mouse-hint">{module === 'desktop' ? hint : 'Aponte para o painel e use o gatilho do controle.'}</div>
+    <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status"><span className="vr-mode-label">{module === 'desktop' ? 'DESKTOP · MOUSE' : 'VR · HEADSET'}</span>{lab.message}</div><div className="vr-mouse-hint">{hint}</div>
       <Canvas camera={{ position: [2.4, 2.2, 3.5], fov: 48 }}><color attach="background" args={['#101e2a']} /><ambientLight intensity={1.8} /><directionalLight position={[3, 7, 4]} intensity={3} />
         <gridHelper args={[10, 40, '#34626d', '#253b48']} /><OrbitControls makeDefault enabled={!presenting && !dragging} target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.8} maxDistance={9} />
-        <XRBridge onRenderer={setRenderer} onPresenting={setPresenting} />
+
         <CameraView request={view} presenting={presenting} />
         {lab.boxes.map(b => <Crate key={b.id} box={b} selected={b.id === selected.id} tool={module === 'desktop' ? tool : 'assemble'} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onPose={onPose} interaction={{ enabled: module === 'desktop' && tool === 'assemble', busy: setDragging, hint: setHint }} />)}
-        {module === 'vr' && <group position={[0, 0, -1.6]}>
-          <Label text={`MB6 • CAIXA ${selected.id} • ${selected.walls.filter(Boolean).length}/4 PAREDES • ${selected.locks.filter(Boolean).length}/4 TRAVAS`} position={[0, 2.6, 0]} width={3.8} />
-          <Label text={lab.message} position={[0, 2.42, 0]} width={3.8} />
-          {actions.map((a, i) => <Label key={i} text={a.label} position={[-1.3 + (i % 3) * 1.3, 2.2 - Math.floor(i / 3) * 0.18, 0]} action={a.run} />)}
-          {(['x', 'y', 'z'] as const).flatMap((axis, i) => [-0.02, 0.02].map((d, j) => <Label key={`${axis}${d}`} text={`${axis.toUpperCase()} ${d > 0 ? '+' : '−'}20 mm`} position={[-1.5 + (i * 2 + j) * 0.6, 1.22, 0]} width={0.55} action={() => move(axis, d)} />))}
-          {lab.boxes.map((b, i) => <Label key={b.id} text={`Selecionar caixa ${b.id}`} position={[-0.65 + i * 1.3, 1.02, 0]} action={() => dispatch({ type: 'select', id: b.id })} />)}
-          <Label text="Reiniciar" position={[-0.65, 0.82, 0]} action={() => dispatch({ type: 'reset' })} /><Label text="Sair do VR" position={[0.65, 0.82, 0]} action={() => void renderer?.xr.getSession()?.end()} />
-        </group>}
+        <XRInteraction lab={lab} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onRenderer={setRenderer} onPresenting={setPresenting} onHint={setHint}>
+          <mesh position={[0, 0, -0.012]}><boxGeometry args={[0.46, 0.64, 0.018]} /><meshStandardMaterial color="#203541" roughness={0.8} /></mesh>
+          <mesh position={[0, 0.32, 0]}><boxGeometry args={[0.16, 0.035, 0.025]} /><meshStandardMaterial color="#aebcc4" metalness={0.7} roughness={0.3} /></mesh>
+          <Label text={`MB6 · Caixa ${selected.id} · ${selected.walls.filter(Boolean).length}/4 paredes · ${selected.locks.filter(Boolean).length}/4 travas`} position={[0, 0.27, 0.002]} width={0.42} />
+          <Label text={page === 0 ? 'MONTAGEM' : page === 1 ? 'TRAVAS E CAIXAS' : 'POSIÇÃO E ENCAIXE'} position={[0, 0.215, 0.002]} width={0.42} />
+          {actions.slice(page * 6, page * 6 + 6).map((action, i) => <Label key={action.label} text={action.label} position={[-0.108 + (i % 2) * 0.216, 0.15 - Math.floor(i / 2) * 0.06, 0.002]} action={action.run} width={0.2} />)}
+          <Label text="‹ Página" position={[-0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + 2) % 3)} />
+          <Label text={`Página ${page + 1}/3 ›`} position={[0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + 1) % 3)} />
+          {lab.boxes.map((box, i) => <Label key={box.id} text={`Selecionar caixa ${box.id}`} position={[-0.108 + i * 0.216, -0.095, 0.002]} width={0.2} action={() => dispatch({ type: 'select', id: box.id })} />)}
+          <Label text={hint} position={[0, -0.16, 0.002]} width={0.42} height={0.06} />
+          <Label text={lab.message} position={[0, -0.22, 0.002]} width={0.42} />
+          <Label text="Reiniciar" position={[-0.108, -0.28, 0.002]} width={0.2} action={() => dispatch({ type: 'reset' })} /><Label text="Sair do VR" position={[0.108, -0.28, 0.002]} width={0.2} action={() => void renderer?.xr.getSession()?.end()} />
+        </XRInteraction>
       </Canvas>
     </section>
   </main>;

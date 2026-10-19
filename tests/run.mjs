@@ -449,5 +449,79 @@ try {
     assert.equal(s.boxes.length, 2);
     assert.ok(Math.abs(s.boxes[0].pose.x - s.boxes[1].pose.x) > (MB6.w + MB6.d) / (2 * Math.sqrt(2)) + MB6.w / 2);
   });
+  const { navigationInput, canGrabBox, grabbedPose, leverMotion, navigateRig } = await load('utils/xrInteraction.js');
+  const pad = (grip, x = 0, y = 0, mapping = 'xr-standard') => ({ mapping, buttons: [{ pressed: false, value: 0 }, { pressed: grip, value: grip ? 1 : 0 }], axes: [0,0,x,y] });
+  test('XR grips gate locomotion, ignore drift and reserve dual grip for dolly', () => {
+    assert.deepEqual(navigationInput([pad(false, 1, 1)], .016), { orbit: 0, elevation: 0, dolly: 0 });
+    assert.deepEqual(navigationInput([pad(true, .1, -.1)], .016), { orbit: 0, elevation: 0, dolly: 0 });
+    assert.ok(navigationInput([pad(true, 1, -1)], .016).orbit > 0);
+    assert.ok(navigationInput([pad(true, 1, -1)], .016).elevation > 0);
+    const both = navigationInput([pad(true, 1, 0),pad(true, 0, -1)], .016);
+    assert.equal(both.orbit, 0); assert.equal(both.elevation, 0); assert.ok(both.dolly < 0);
+    assert.equal(navigationInput([pad(true,1,1,'')], .016).orbit, 0);
+    assert.equal(navigationInput([null, pad(true,0,NaN)], .016).dolly, 0);
+    assert.ok(Math.abs(navigationInput([pad(true,1,0)], 10).orbit - .04) < 1e-12);
+  });
+  test('XR navigation preserves headset room offset and orbits around selected crate', () => {
+    const rig={x:0,y:0,z:3,yaw:0}, viewer={x:.3,y:1.7,z:.2}, center={x:-.8,y:0,z:0};
+    const nav={orbit:.5,elevation:0,dolly:0};
+    const next=navigateRig(rig,viewer,center,nav);
+    const before=Math.hypot(rig.x+viewer.x-center.x,rig.z+viewer.z-center.z);
+    const eye={x:next.x+viewer.x*Math.cos(next.yaw)+viewer.z*Math.sin(next.yaw),z:next.z-viewer.x*Math.sin(next.yaw)+viewer.z*Math.cos(next.yaw)};
+    assert.ok(Math.abs(Math.hypot(eye.x-center.x,eye.z-center.z)-before)<1e-12);
+    assert.equal(next.yaw,-.5); assert.equal(next.y,0);
+    const inward=navigateRig(rig,{x:0,y:1.7,z:0},{x:0,y:0,z:0},{orbit:0,elevation:0,dolly:-10});
+    assert.equal(inward.z,.85);
+    assert.equal(navigateRig(rig,viewer,center,{orbit:0,elevation:20,dolly:0}).y,1.5);
+  });
+  test('XR grab translates and rotates about both hands without scaling or tilting', () => {
+    const origin = { x:0, y:0, z:-1, yaw:0 };
+    const start = [{x:-.3,y:1,z:0},{x:.3,y:1,z:0}];
+    assert.deepEqual(grabbedPose(origin,start,start.map(p=>({...p,y:2}))), {...origin,y:1});
+    assert.deepEqual(grabbedPose(origin,start,[{x:-.6,y:1,z:0},{x:.6,y:1,z:0}]), origin);
+    const turned=grabbedPose(origin,start,[{x:0,y:1,z:.3},{x:0,y:1,z:-.3}]);
+    assert.ok(Math.abs(turned.yaw-Math.PI/2)<1e-10); assert.ok(Math.abs(turned.x+1)<1e-10);
+    const close=grabbedPose(origin,start,[{x:0,y:1,z:0},{x:.01,y:1,z:0}]);
+    assert.equal(close.yaw,0);
+  });
+  test('XR grabbing requires a complete unsupported box and cannot lift a supporting base', () => {
+    assert.equal(canGrabBox(initialLab(), initialLab().boxes[0]),false);
+    let s=assemble(reduceLab(assemble(initialLab()),{type:'add'}));
+    assert.equal(canGrabBox(s,s.boxes[1]),true);
+    s=reduceLab(s,{type:'drop',pose:{...s.boxes[0].pose,y:MB6.h}});
+    assert.equal(canGrabBox(s,s.boxes[0]),false); assert.equal(canGrabBox(s,s.boxes[1]),false);
+  });
+  test('XR release snaps matched feet and preserves the base; invalid releases preserve origin', () => {
+    const s=assemble(reduceLab(assemble(initialLab()),{type:'add'}));
+    const base=s.boxes[0], original=s.boxes[1];
+    const valid=reduceLab(s,{type:'drop',pose:{...base.pose,y:MB6.h-.015}});
+    assert.equal(valid.boxes[1].support,base.id); assert.equal(valid.boxes[1].pose.y,MB6.h-MB6.pin);
+    assert.deepEqual(valid.boxes[0],base);
+    for(const pose of [{...base.pose,y:MB6.h,yaw:Math.PI/2},{...base.pose,y:.5},{...original.pose,y:1.9},{...base.pose,y:0},{...original.pose,x:NaN}]) {
+      assert.deepEqual(reduceLab(s,{type:'drop',pose}).boxes,s.boxes);
+    }
+    const floor=reduceLab(s,{type:'drop',pose:{...original.pose,y:.04,z:.2}});
+    assert.equal(floor.boxes[1].pose.y,0); assert.equal(floor.boxes[1].pose.z,.2);
+    assert.deepEqual(reduceLab(initialLab(),{type:'drop',pose:original.pose}).boxes, initialLab().boxes);
+  });
+  test('XR held lever gestures follow lift-slide-lower and reverse bolt direction on unlock', () => {
+    assert.equal(leverMotion('lift',{x:.2,y:0,z:0},1),null);
+    assert.equal(leverMotion('lift',{x:0,y:.04,z:0},1),'lift');
+    assert.equal(leverMotion('slide',{x:-.04,y:0,z:0},1),null);
+    assert.equal(leverMotion('slide',{x:.04,y:0,z:0},1),'slide');
+    assert.equal(leverMotion('slide',{x:-.04,y:0,z:0},-1),'slide');
+    assert.equal(leverMotion('lower',{x:0,y:-.04,z:0},1),'lower');
+    assert.equal(leverMotion('open',{x:0,y:-.04,z:0},1),'lower');
+    assert.equal(leverMotion('open',{x:-.04,y:0,z:0},-1),'slide');
+    assert.equal(leverMotion('done',{x:1,y:1,z:1},1),null);
+    let s=reduceLab(initialLab(),{type:'lid'});
+    for(const i of ASSEMBLY_ORDER) s=reduceLab(s,{type:'wall',index:i});
+    for(const direction of [1,-1]) {
+      for(const [phase,delta] of [['lift',{x:0,y:.04,z:0}],['slide',{x:.04*direction,y:0,z:0}],['lower',{x:0,y:-.04,z:0}]]) {
+        s=reduceLab(s,{type:'lever',index:0,step:leverMotion(phase,delta,direction)});
+      }
+      assert.equal(s.boxes[0].locks[0],direction===1);
+    }
+  });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }

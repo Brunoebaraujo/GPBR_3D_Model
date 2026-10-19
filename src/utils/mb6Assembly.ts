@@ -13,7 +13,7 @@ export type Pose = { x: number; y: number; z: number; yaw: number };
 export type LeverStep = 'lift' | 'slide' | 'lower';
 export type Assembly = { id: number; walls: boolean[]; locks: boolean[]; leverRaised: boolean[]; bolts: boolean[]; lid: boolean; pose: Pose; support: number | null };
 export type Lab = { boxes: Assembly[]; selected: number; message: string };
-export type Action = { type: 'select'; id: number } | { type: 'wall'; index: number } | { type: 'lever'; index: number; step: LeverStep } | { type: 'lid' | 'add' | 'reset' | 'stack' | 'unstack' } | { type: 'move'; pose: Pose };
+export type Action = { type: 'select'; id: number } | { type: 'wall'; index: number } | { type: 'lever'; index: number; step: LeverStep } | { type: 'lid' | 'add' | 'reset' | 'stack' | 'unstack' } | { type: 'move' | 'drop'; pose: Pose };
 export const createBox = (id: number): Assembly => ({ id, walls: [false, false, false, false], locks: [false, false, false, false], leverRaised: [false, false, false, false], bolts: [false, false, false, false], lid: true, pose: { x: id === 1 ? -0.8 : 0.8, y: 0, z: 0, yaw: 0 }, support: null });
 export const boxHeight = (box: Assembly) => box.walls.some(Boolean) ? MB6.h : MB6.collapsed;
 export const leverGesture = (dx: number, dy: number): LeverStep => Math.abs(dx) > Math.abs(dy) ? 'slide' : dy < 0 ? 'lift' : 'lower';
@@ -91,6 +91,15 @@ export function reduceLab(state: Lab, action: Action): Lab {
     const base = state.boxes.find(other => fitsStack(b, other));
     if (!base) return fail('Encaixe recusado: complete ambas as caixas e alinhe os quatro pés aos vértices (35 mm).');
     return update({ ...b, support: base.id, pose: { ...base.pose, y: base.pose.y + MB6.h - MB6.pin, yaw: base.pose.yaw + (Math.cos(b.pose.yaw - base.pose.yaw) < 0 ? Math.PI : 0) } }, 'Encaixe confirmado: quatro pés alinhados aos quatro vértices.');
+  }
+  if (action.type === 'drop') {
+    if (!ready(b)) return fail('Monte, trave e tampe a caixa antes de segurá-la com as duas mãos.');
+    const p = action.pose;
+    if (!Object.values(p).every(Number.isFinite)) return fail('Posição inválida. A caixa voltou ao ponto de partida.');
+    const base = state.boxes.find(other => fitsStack({ ...b, pose: p }, other));
+    if (base) return reduceLab({ ...state, boxes: state.boxes.map(box => box.id === b.id ? { ...box, pose: p } : box) }, { type: 'stack' });
+    if (Math.abs(p.y) <= 0.08) return reduceLab(state, { type: 'move', pose: { ...p, y: 0 } });
+    return fail('Sem apoio válido: alinhe os quatro pés à outra caixa ou solte perto do piso. Caixa devolvida à origem.');
   }
   if (action.type === 'move') {
     const p = action.pose;

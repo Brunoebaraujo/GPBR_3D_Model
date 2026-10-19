@@ -64,7 +64,7 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
     if (handle.current) handle.current.rotation.x += ((raised ? -1.15 : 0) - handle.current.rotation.x) * speed;
     if (carriage.current) carriage.current.position.x += ((bolt ? direction * 0.038 : 0) - carriage.current.position.x) * speed;
   });
-  return <group position={[x, height - 0.035, 0.032]} {...gesture.events} userData={{ activate: () => operate(raised ? 'lower' : 'lift') }}>
+  return <group position={[x, height - 0.035, 0.032]} {...gesture.events} userData={{ xrLever: { boxId: box.id, index, direction }, activate: () => operate(raised ? 'lower' : 'lift') }}>
     <Part position={[0, 0, 0]} size={[0.15, 0.05, 0.014]} />
     <Part position={[direction * 0.085, 0, 0.012]} size={[0.025, 0.045, 0.035]} color="#356b99" />
     <group ref={carriage}>
@@ -134,7 +134,7 @@ export function Crate({ box, selected, tool, dispatch, onPose, interaction }: { 
     group.position.set(pose.x, pose.y, pose.z); group.rotation.set(0, pose.yaw, 0); interaction.busy(false);
   };
   return <>
-    <group ref={setGroup} position={[box.pose.x, box.pose.y, box.pose.z]} rotation={[0, box.pose.yaw, 0]} onClick={e => { if (!interaction.enabled) { e.stopPropagation(); dispatch({ type: 'select', id: box.id }); } }}>
+    <group ref={setGroup} userData={{ xrBoxId: box.id }} position={[box.pose.x, box.pose.y, box.pose.z]} rotation={[0, box.pose.yaw, 0]} onClick={e => { if (!interaction.enabled) { e.stopPropagation(); dispatch({ type: 'select', id: box.id }); } }}>
       <Part position={[0, 0.065, 0]} size={[MB6.w, 0.01, MB6.d]} color={selected ? '#829da8' : '#a9b7c0'} />
       {/* Open pallet frame with runners and intermediate supports. */}
       {[-1, 1].map(side => <group key={side}>
