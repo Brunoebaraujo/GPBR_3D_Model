@@ -4,13 +4,11 @@ import { ready } from './mb6Assembly';
 export type Point3 = { x: number; y: number; z: number };
 export type XRPad = { mapping: string; buttons: ReadonlyArray<{ pressed: boolean; value: number }>; axes: readonly number[] };
 const deadzone = (value: number) => Number.isFinite(value) && Math.abs(value) > 0.18 ? Math.sign(value) * (Math.min(1, Math.abs(value)) - 0.18) / 0.82 : 0;
-export function navigationInput(pads: Array<XRPad | null>, dt: number) {
-  const active = pads.filter((p): p is XRPad => !!p && p.mapping === 'xr-standard' && (p.buttons[1]?.pressed || p.buttons[1]?.value > 0.65));
-  const time = Math.max(0, Math.min(0.05, dt));
-  const dominant = (axis: number) => active.map(p => deadzone(p.axes[axis] ?? 0)).reduce((a, b) => Math.abs(b) > Math.abs(a) ? b : a, 0);
-  return active.length >= 2
-    ? { orbit: 0, elevation: 0, dolly: dominant(3) * time * 0.8 }
-    : { orbit: dominant(2) * time * 0.8, elevation: -dominant(3) * time * 0.5 || 0, dolly: 0 };
+export function navigationInput(pads: { left: XRPad | null; right: XRPad | null }, dt: number) {
+  const time = Number.isFinite(dt) ? Math.max(0, Math.min(0.05, dt)) : 0;
+  const axis = (pad: XRPad | null, i: number) => pad?.mapping === 'xr-standard' ? deadzone(pad.axes[i] ?? 0) : 0;
+  const x = axis(pads.right, 2), z = axis(pads.right, 3), length = Math.max(1, Math.hypot(x, z));
+  return { turn: axis(pads.left, 2) * time * 1.1, strafe: x / length * time * 1.2, forward: -z / length * time * 1.2 || 0 };
 }
 export const canGrabBox = (lab: Lab, box: Assembly) => ready(box) && box.support === null && !lab.boxes.some(other => other.support === box.id);
 export const midpoint = (a: Point3, b: Point3): Point3 => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 });
@@ -30,16 +28,17 @@ export function leverMotion(phase: LeverPhase, delta: Point3, direction: number)
   return null;
 }
 
-export function navigateRig(rig: Pose, viewer: Point3, center: Point3, nav: { orbit: number; elevation: number; dolly: number }): Pose {
-  const yaw = rig.yaw - nav.orbit;
+// Turning pivots around the actual headset, including room-scale offsets.
+// Movement follows the headset's horizontal heading, never its pitch.
+export function navigateRig(rig: Pose, viewer: Point3, headYaw: number, nav: { turn: number; strafe: number; forward: number }): Pose {
+  const yaw = rig.yaw - nav.turn;
   const eyeX = rig.x + viewer.x * Math.cos(rig.yaw) + viewer.z * Math.sin(rig.yaw);
   const eyeZ = rig.z - viewer.x * Math.sin(rig.yaw) + viewer.z * Math.cos(rig.yaw);
-  const dx = eyeX - center.x, dz = eyeZ - center.z;
-  let x = dx * Math.cos(-nav.orbit) + dz * Math.sin(-nav.orbit);
-  let z = -dx * Math.sin(-nav.orbit) + dz * Math.cos(-nav.orbit);
-  const radius = Math.hypot(x,z);
-  if (nav.dolly && radius > 0.001) { const scale = Math.max(0.85, Math.min(6, radius + nav.dolly)) / radius; x *= scale; z *= scale; }
-  return { x: center.x + x - viewer.x * Math.cos(yaw) - viewer.z * Math.sin(yaw),
-    y: Math.max(-0.5, Math.min(1.5, rig.y + nav.elevation)),
-    z: center.z + z + viewer.x * Math.sin(yaw) - viewer.z * Math.cos(yaw), yaw };
+  const heading = yaw + headYaw;
+  return {
+    x: eyeX - viewer.x * Math.cos(yaw) - viewer.z * Math.sin(yaw) + nav.strafe * Math.cos(heading) - nav.forward * Math.sin(heading),
+    y: rig.y,
+    z: eyeZ + viewer.x * Math.sin(yaw) - viewer.z * Math.cos(yaw) - nav.strafe * Math.sin(heading) - nav.forward * Math.cos(heading),
+    yaw,
+  };
 }
