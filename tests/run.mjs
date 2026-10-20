@@ -353,7 +353,7 @@ try {
     const pair=findRoadBatch(side,base,2);assert.equal(pair.length,2);
     assert.equal(validateRoad({...side,units:pair,vehicle:{...side.vehicle,sideHeight:2000}}).valid,false);
   });
-  const { initialLab, reduceLab, ready, fitsStack, MB6, boxHeight, leverGesture, ASSEMBLY_ORDER, FOLD_ORDER, WALL_PIVOT_Y } = await load('utils/mb6Assembly.js');
+  const { initialLab, reduceLab, ready, fitsStack, MB6, boxHeight, leverGesture, ASSEMBLY_ORDER, FOLD_ORDER, WALL_PIVOT_Y, WALL_SEATING_TRAVEL, MB6_VISUAL_COLLAPSED, LEVER_FOLDED_PROJECTION, wallMotion } = await load('utils/mb6Assembly.js');
   const operateLever = (state, index) => ['lift', 'slide', 'lower'].reduce((s, step) => reduceLab(s, { type: 'lever', index, step }), state);
   const assemble = state => {
     state = reduceLab(state, { type: 'lid' });
@@ -446,7 +446,7 @@ try {
     s = reduceLab(s, { type: 'wall', index: 1 }); assert.equal(s.boxes[0].walls[1], false);
   });
   test('MB6 datasheet collapsed height and mouse gesture directions are respected', () => {
-    assert.equal(boxHeight(initialLab().boxes[0]), 0.224);
+    assert.equal(MB6.collapsed, 0.224); assert.equal(boxHeight(initialLab().boxes[0]), MB6_VISUAL_COLLAPSED);
     assert.equal(boxHeight(assemble(initialLab()).boxes[0]), 1.076);
     assert.equal(leverGesture(5, -50), 'lift'); assert.equal(leverGesture(5, 50), 'lower');
     assert.equal(leverGesture(50, 5), 'slide'); assert.equal(leverGesture(-50, 5), 'slide');
@@ -683,6 +683,32 @@ try {
     assert.equal(canOperateLever(open,{...b,restingOn:2},0),false);
     assert.equal(canOperateLever({...open,boxes:[b,{...b,id:2,support:1}]},b,0),false);
     assert.equal(canOperateLever(open,b,4),false);
+  });
+  test('Folded wall 1 clears wall 3 latches and the lid clears the raised wall hardware', () => {
+    const lowerLatchTop = WALL_PIVOT_Y[2] + LEVER_FOLDED_PROJECTION;
+    const upperPanelBottom = WALL_PIVOT_Y[0] + WALL_SEATING_TRAVEL - .006;
+    assert.ok(upperPanelBottom - lowerLatchTop > .005);
+    const topLatch = WALL_PIVOT_Y[0] + WALL_SEATING_TRAVEL + LEVER_FOLDED_PROJECTION;
+    assert.ok(MB6_VISUAL_COLLAPSED - .012 > topLatch);
+  });
+  test('Wall 1 rotates raised then seats downward; folding unseats before rotating', () => {
+    let motion={angle:-Math.PI/2,lift:WALL_SEATING_TRAVEL,velocity:0};
+    let descending=false;
+    for(let i=0;i<200;i++) {
+      const previous=motion;
+      motion=wallMotion(0,motion.angle,motion.lift,motion.velocity,true,false,1/60);
+      if(motion.angle<0) assert.equal(motion.lift,WALL_SEATING_TRAVEL);
+      if(motion.lift<previous.lift) {descending=true;assert.equal(motion.angle,0);}
+    }
+    assert.ok(descending);assert.equal(motion.lift,0);assert.equal(motion.angle,0);
+    for(let i=0;i<200;i++) {
+      motion=wallMotion(0,motion.angle,motion.lift,motion.velocity,false,false,1/60);
+      if(motion.lift<WALL_SEATING_TRAVEL) assert.equal(motion.angle,0);
+    }
+    assert.equal(motion.angle,-Math.PI/2);assert.equal(motion.lift,WALL_SEATING_TRAVEL);
+    const held=wallMotion(0,-.2,WALL_SEATING_TRAVEL,2,true,true,.02);
+    assert.equal(held.angle,-.2);assert.equal(held.lift,WALL_SEATING_TRAVEL);
+    assert.equal(wallMotion(2,-.2,0,0,true,false,.02).lift,0);
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }

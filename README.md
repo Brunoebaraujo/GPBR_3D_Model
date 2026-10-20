@@ -401,3 +401,6 @@ the rigid box uses their midpoint/baseline fit rather than stretching. Existing
 collision, workspace and stacking constraints still apply. Release, tracking loss
 and module changes clear the anchors. Thumbstick offsets are disabled during this
 fixed-depth grab so they cannot change reach.
+
+### Wall 1 sliding seat
+Wall 1 now clears wall 3 latches using an illustrative 50 mm sliding-hinge travel. It rotates while raised and descends only once upright; folding reverses this order. The assembly display and its collision envelope use a 279.5 mm visual collapsed height to clear the modeled hardware and lid. The manufacturer reference remains 224 mm; hinge/hardware dimensions require measurement before claiming dimensional fidelity.

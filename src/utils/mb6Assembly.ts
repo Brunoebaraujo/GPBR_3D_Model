@@ -8,6 +8,27 @@ export const WALL_NAMES = ['Frente', 'Direita', 'Fundo', 'Esquerda'];
 export const ASSEMBLY_ORDER = [0, 2, 3, 1] as const;
 export const FOLD_ORDER = [1, 3, 2, 0] as const;
 export const WALL_PIVOT_Y = [0.152, 0.080, 0.128, 0.104] as const;
+// Visual sliding hinge clearance: wall 1 must clear wall 3's folded latch.
+// Hardware/hinge travel is illustrative, not a measured manufacturer dimension.
+export const WALL_SEATING_TRAVEL = 0.05;
+export const LEVER_FOLDED_PROJECTION = 0.032 + 0.012 + 0.035 / 2;
+export const MB6_VISUAL_COLLAPSED = Math.max(MB6.collapsed, WALL_PIVOT_Y[0] + WALL_SEATING_TRAVEL + LEVER_FOLDED_PROJECTION + 0.016);
+export function wallMotion(index: number, angle: number, lift: number, velocity: number, raised: boolean, held: boolean, dt: number) {
+  const step = Math.max(0, Math.min(dt, .04));
+  const travel = index === 0 ? WALL_SEATING_TRAVEL : 0;
+  const approach = (value: number, target: number, speed: number) => value + Math.sign(target-value)*Math.min(Math.abs(target-value), speed*step);
+  if (held) return { angle, lift:approach(lift,travel,.16), velocity:0 };
+  if (raised) {
+    angle = approach(angle,0,2.2);
+    // Seat vertically only after the panel has reached its upright orientation.
+    return { angle, lift:approach(lift, angle === 0 ? 0 : travel,.16), velocity:0 };
+  }
+  lift = approach(lift,travel,.16);
+  if (lift < travel) return { angle, lift, velocity:0 };
+  velocity += Math.max(.8,9.81*Math.sin(-angle))*step;
+  angle = Math.max(-Math.PI/2,angle-velocity*step);
+  return { angle, lift, velocity:angle <= -Math.PI/2 ? 0 : velocity };
+}
 export const nextWall = (walls: boolean[], raising: boolean) => (raising ? ASSEMBLY_ORDER : FOLD_ORDER).find(i => walls[i] !== raising);
 export type Pose = { x: number; y: number; z: number; yaw: number };
 export type LeverStep = 'lift' | 'slide' | 'lower';
@@ -15,7 +36,7 @@ export type Assembly = { id: number; walls: boolean[]; locks: boolean[]; leverRa
 export type Lab = { boxes: Assembly[]; selected: number; message: string };
 export type Action = { type: 'select'; id: number } | { type: 'wall'; index: number } | { type: 'lever'; index: number; step: LeverStep } | { type: 'lid' | 'add' | 'reset' | 'stack' | 'unstack' } | { type: 'move' | 'drop'; pose: Pose };
 export const createBox = (id: number): Assembly => ({ id, walls: [false, false, false, false], locks: [false, false, false, false], leverRaised: [false, false, false, false], bolts: [false, false, false, false], lid: true, pose: { x: id === 1 ? -0.8 : 0.8, y: 0, z: 0, yaw: 0 }, support: null });
-export const boxHeight = (box: Assembly) => box.walls.some(Boolean) ? MB6.h : MB6.collapsed;
+export const boxHeight = (box: Assembly) => box.walls.some(Boolean) ? MB6.h : MB6_VISUAL_COLLAPSED;
 export const leverGesture = (dx: number, dy: number): LeverStep => Math.abs(dx) > Math.abs(dy) ? 'slide' : dy < 0 ? 'lift' : 'lower';
 const floorSlot = (boxes: Assembly[], preferredX: number) => [preferredX, -0.8, -2.4, 2.4].find(x => boxes.every(other => {
   const halfX = Math.abs(Math.cos(other.pose.yaw)) * MB6.w / 2 + Math.abs(Math.sin(other.pose.yaw)) * MB6.d / 2;

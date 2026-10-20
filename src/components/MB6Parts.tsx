@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Edges, TransformControls } from '@react-three/drei';
 import { CanvasTexture, Group, Vector3, Mesh, MeshStandardMaterial, Color } from 'three';
-import { MB6, WALL_PIVOT_Y, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
+import { MB6, WALL_PIVOT_Y, WALL_SEATING_TRAVEL, MB6_VISUAL_COLLAPSED, wallMotion, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
 
 type Vec = [number, number, number];
 export type MouseTool = 'assemble' | 'translate' | 'rotate';
@@ -85,7 +85,8 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
       </group>
     </group>
     <Part position={[0, -0.18, 0]} size={[0.065, 0.018, 0.005]} color={box.locks[index] ? '#1bc89d' : '#efa94c'} />
-    <mesh><boxGeometry args={[0.18, 0.36, 0.15]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} /></mesh>
+    {/* The oversized grab target must not protrude through a folded upper wall. */}
+    {!box.lid && box.walls[index] && box.walls[(index + 1) % 4] && <mesh><boxGeometry args={[0.18, 0.36, 0.15]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} /></mesh>}
   </group>;
 }
 
@@ -102,9 +103,8 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
     const wall=ref.current; if(!wall) return;
     const flash=performance.now()<(wall.userData.invalidUntil??0) && Math.floor(performance.now()/100)%2===0;
     wall.traverse(o=>{if(o instanceof Mesh && o.material instanceof MeshStandardMaterial){if(!o.userData.originalEmissive)o.userData.originalEmissive=o.material.emissive.clone();o.material.emissive.copy(o.userData.originalEmissive);if(flash)o.material.emissive.set('#ff0000');o.material.emissiveIntensity=flash?1:.3;}});
-    if(wall.userData.xrHeld){velocity.current=0;return;}
-    if(raised){velocity.current=0;wall.rotation.x+=(0-wall.rotation.x)*Math.min(1,dt*9);}
-    else {const step=Math.min(dt,.04);velocity.current+=Math.max(.8,9.81*Math.sin(-wall.rotation.x))*step;wall.rotation.x=Math.max(-Math.PI/2,wall.rotation.x-velocity.current*step);if(wall.rotation.x<=-Math.PI/2)velocity.current=0;}
+    const next = wallMotion(index, wall.rotation.x, wall.position.y, velocity.current, raised, !!wall.userData.xrHeld, dt);
+    wall.rotation.x=next.angle; wall.position.y=next.lift; velocity.current=next.velocity;
   });
   return <group position={location} rotation={[0, [0, Math.PI / 2, Math.PI, -Math.PI / 2][index], 0]}>
     <Part position={[0, (0.07 - pivot) / 2, 0]} size={[width - 0.09, pivot - 0.07, 0.014]} />
@@ -113,7 +113,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
       {[-1, 1].map(cheek => <Part key={cheek} position={[cheek * 0.018, (0.07 - pivot) / 2, 0]} size={[0.009, pivot - 0.07 + 0.04, 0.044]} color="#d5dce0" />)}
       <mesh rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.009, 0.009, 0.052, 16]} /><meshStandardMaterial color="#607783" metalness={0.7} roughness={0.3} /></mesh>
     </group>)}
-    <group ref={ref} rotation={[-Math.PI / 2, 0, 0]} userData={wallData}>
+    <group ref={ref} position={[0, index === 0 ? WALL_SEATING_TRAVEL : 0, 0]} rotation={[-Math.PI / 2, 0, 0]} userData={wallData}>
       {[-1, 1].map(side => <Part key={side} position={[side * (width / 2 - 0.035), 0.013, 0]} size={[0.024, 0.04, 0.014]} />)}
       <group {...gesture.events} userData={{ activate: () => act({ type: 'wall', index }) }}>
         <WallNumber number={index + 1} height={height} />
@@ -128,7 +128,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
 
 function Lid({ box, act, interaction }: { box: Assembly; act: (a: Action) => void; interaction: Interaction }) {
   const ref = useRef<Group>(null);
-  const height = box.walls.some(Boolean) ? MB6.h - 0.035 : MB6.collapsed - 0.006;
+  const height = box.walls.some(Boolean) ? MB6.h - 0.035 : MB6_VISUAL_COLLAPSED - 0.006;
   // Keep the initial JSX transform stable: changing wall height must not teleport
   // the removed lid back onto the crate before the next animation frame.
   const [initialPosition] = useState<Vec>(() => [0, box.lid ? height : 0.025, box.lid ? 0 : 1.7]);
