@@ -82,6 +82,7 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
 function Wall({ index, box, act, interaction }: { index: number; box: Assembly; act: (a: Action) => void; interaction: Interaction }) {
   const ref = useRef<Group>(null), raised = box.walls[index];
   const velocity = useRef(0);
+  const wallData = useMemo(() => ({ xrWall: { boxId: box.id, index }, xrHeld: false, invalidUntil: 0 }), [box.id,index]);
   const width = (index % 2 ? MB6.d : MB6.w) - 0.06;
   const pivot = WALL_PIVOT_Y[index];
   const location: Vec = index === 0 ? [0, pivot, MB6.d / 2 - 0.025] : index === 1 ? [MB6.w / 2 - 0.025, pivot, 0] : index === 2 ? [0, pivot, -MB6.d / 2 + 0.025] : [-MB6.w / 2 + 0.025, pivot, 0];
@@ -102,7 +103,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
       {[-1, 1].map(cheek => <Part key={cheek} position={[cheek * 0.018, (0.07 - pivot) / 2, 0]} size={[0.009, pivot - 0.07 + 0.04, 0.044]} color="#d5dce0" />)}
       <mesh rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.009, 0.009, 0.052, 16]} /><meshStandardMaterial color="#607783" metalness={0.7} roughness={0.3} /></mesh>
     </group>)}
-    <group ref={ref} rotation={[-Math.PI / 2, 0, 0]} userData={{ xrWall: { boxId: box.id, index } }}>
+    <group ref={ref} rotation={[-Math.PI / 2, 0, 0]} userData={wallData}>
       {[-1, 1].map(side => <Part key={side} position={[side * (width / 2 - 0.035), 0.013, 0]} size={[0.024, 0.04, 0.014]} />)}
       <group {...gesture.events} userData={{ activate: () => act({ type: 'wall', index }) }}>
         <WallNumber number={index + 1} height={height} />
@@ -110,7 +111,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
         {[-1, 0, 1].map(x => <Part key={x} position={[x * (width / 2 - 0.025), height / 2, 0.008]} size={[0.025, height, 0.012]} highlight={gesture.hovered} />)}
         {[0, 0.5, 1].map(y => <Part key={y} position={[0, y * (height - 0.02), 0.008]} size={[width, 0.02, 0.012]} highlight={gesture.hovered} />)}
       </group>
-      {(index === 0 ? [3, 0] : index === 2 ? [1, 2] : []).map((corner, side) => <Lever key={corner} index={corner} box={box} x={(side ? 1 : -1) * (width / 2 - 0.11)} height={height} act={act} interaction={interaction} direction={side ? 1 : -1} />)}
+      {(raised && index === 0 ? [3, 0] : raised && index === 2 ? [1, 2] : []).map((corner, side) => <Lever key={corner} index={corner} box={box} x={(side ? 1 : -1) * (width / 2 - 0.11)} height={height} act={act} interaction={interaction} direction={side ? 1 : -1} />)}
     </group>
   </group>;
 }

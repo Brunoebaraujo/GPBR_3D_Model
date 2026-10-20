@@ -14,5 +14,5 @@ export function controllerHand() {
     const tip=new Group();tip.position.z=-.036;finger.add(tip);joints.push(tip);part(tip,0,0,-.013,.014,.021,.026);
   }
   const thumb=new Group();thumb.position.set(.043,0,.012);thumb.rotation.y=-.7;root.add(thumb);part(thumb,0,0,-.025,.022,.025,.05);
-  return {root, update:(value:number,left:boolean)=>{root.scale.x=left?-1:1;joints.forEach(j=>j.rotation.x=-value*1.45);thumb.rotation.z=-value*.8;},dispose:()=>{geometry.dispose();material.dispose();}};
+  return {root, update:(value:number,left:boolean)=>{root.scale.x=left?1:-1;joints.forEach(j=>j.rotation.x=-value*1.45);thumb.rotation.z=-value*.8;},dispose:()=>{geometry.dispose();material.dispose();}};
 }

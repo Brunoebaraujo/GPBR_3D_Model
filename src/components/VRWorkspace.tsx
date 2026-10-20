@@ -102,7 +102,7 @@ export function VRWorkspace() {
     { label: 'Desempilhar', run: () => dispatch({ type: 'unstack' }) },
     { label: 'Girar 90°', run: () => dispatch({ type: 'move', pose: { ...selected.pose, yaw: selected.pose.yaw + Math.PI / 2 } }) },
   ];
-  const vrActions = actions.filter((_, i) => i === 0 || i > 4);
+  const vrActions = actions;
   const vrPages = Math.ceil(vrActions.length / 6);
   return <main className="vr-lab">
     <aside className="vr-panel"><p className="vr-eyebrow">LOAD STUDIO · MONTAGEM</p><h1>Monte. Trave. Empilhe.</h1><p>MB6 · 1120 × 1220 × 1076 mm</p>
@@ -129,7 +129,7 @@ export function VRWorkspace() {
         <XRInteraction lab={lab} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onRenderer={setRenderer} onPresenting={setPresenting} onHint={setHint}>
           <mesh position={[0, 0, -0.012]}><boxGeometry args={[0.46, 0.64, 0.018]} /><meshStandardMaterial color="#203541" roughness={0.8} /></mesh>
           <Label text={`MB6 · Caixa ${selected.id} · ${selected.walls.filter(Boolean).length}/4 paredes · ${selected.locks.filter(Boolean).length}/4 travas`} position={[0, 0.27, 0.002]} width={0.42} />
-          <Label text={page === 0 ? 'TRAVAS E CAIXAS' : 'POSIÇÃO E ENCAIXE'} position={[0, 0.215, 0.002]} width={0.42} />
+          <Label text={['MONTAGEM', 'TRAVAS E CAIXAS', 'POSIÇÃO E ENCAIXE'][page]} position={[0, 0.215, 0.002]} width={0.42} />
           {vrActions.slice(page * 6, page * 6 + 6).map((action, i) => <Label key={action.label} text={action.label} position={[-0.108 + (i % 2) * 0.216, 0.15 - Math.floor(i / 2) * 0.06, 0.002]} action={action.run} width={0.2} />)}
           <Label text="‹ Página" position={[-0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + vrPages - 1) % vrPages)} />
           <Label text={`Página ${page + 1}/${vrPages} ›`} position={[0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + 1) % vrPages)} />
