@@ -1,3 +1,5 @@
+import { publishVR } from './VRBridge';
+import { RoadVRScene } from './RoadScene';
 import { useEffect, useState } from "react";
 import { GOODPACK_MODELS, type GoodpackModel } from "../data/skus";
 import {
@@ -217,13 +219,36 @@ export function RoadWorkspace() {
     );
     if (accept(units.filter((u) => !ids.includes(u.id)))) setSelected([]);
   };
+  useEffect(() => {
+    publishVR('road', {
+      vehicle,
+      scene: ready ? <RoadVRScene state={state} selected={selected} opacity={opacity} roof={roof} sides={sides} onSelect={select} /> : null,
+      status: ready ? `${vehicle.name} · ${units.length} caixas · ${message}` : 'Configure as dimensões no desktop ou escolha um contêiner na prancheta.',
+      actions: [
+        ...Object.values(ROAD_PRESETS).filter(v => dimensionsReady(v)).map(profile => ({ label: profile.name, run: () => { commit({ ...state, vehicle: { ...profile } }); setBodyIndex(0); setSelected([]); } })),
+        { label: `Caixa: ${model}`, run: () => setModel(model === 'MB5' ? 'MB6' : 'MB5') },
+        { label: `Inclusão: ${batchSize === 1 ? 'unidade' : 'pilha de 2'}`, run: () => setBatchSize(batchSize === 1 ? 2 : 1) },
+        { label: `Produto: ${cargo} kg (+50)`, run: () => setCargo(Math.min(1650, cargo + 50)) },
+        { label: 'Produto: −50 kg', run: () => setCargo(Math.max(0, cargo - 50)) },
+        { label: 'Adicionar Goodpack', run: () => add() },
+        { label: 'Selecionar próxima caixa', run: () => { const next = units[(units.findIndex(u => u.id === selected[0]) + 1) % units.length]; if (next) select(next.id, false); } },
+        { label: `Selecionar: ${selectStacks ? 'pilha' : 'unidade'}`, run: () => { setSelectStacks(!selectStacks); setSelected([]); } },
+        ...(['x', 'y', 'z'] as const).flatMap(axis => [-20, 20].map(delta => ({ label: `${axis.toUpperCase()} ${delta > 0 ? '+' : ''}${delta} mm`, run: () => { if (anchor) translate(axis, anchor[axis] + delta); } }))),
+        { label: 'Girar seleção 90°', run: rotate }, { label: 'Empilhar cópia', run: stack }, { label: 'Excluir seleção', run: remove },
+        { label: 'Desfazer', run: () => { if (cursor > 0) { setCursor(cursor - 1); setSelected([]); } } },
+        { label: `Teto: ${roof ? 'visível' : 'oculto'}`, run: () => setRoof(!roof) },
+        { label: `Laterais: ${sides ? 'visíveis' : 'ocultas'}`, run: () => setSides(!sides) },
+        ...(vehicle.secondBody ? [{ label: `Compartimento ${activeCompartment + 1}`, run: () => setBodyIndex(activeCompartment === 0 ? 1 : 0) }] : []),
+      ],
+    });
+  });
   const selectedClearance = unit ? roadBounds(unit) : null;
   return (
     <main className="road-workspace">
       <aside className="road-panel road-settings">
         <div>
           <p className="eyebrow">Planejamento rodoviário</p>
-          <h1>Goodpack no caminhão</h1>
+          <h1>Estufagem de Goodpacks</h1>
           <p className="muted">MB5 e MB6 montados · até 2 níveis</p>
         </div>
         <section>

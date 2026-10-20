@@ -1,3 +1,4 @@
+import { explorationStart, constrainExploration, type Exploration } from '../utils/xrNavigation';
 import { controllerHand } from './controllerHand';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -5,16 +6,16 @@ import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamer
 import { supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
 import { canGrabBox, grabbedPose, leverMotion, navigationInput, navigateRig, gripHeld, heldBoxInput, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
-type Props = { lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
+type Props = { exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
 type LeverTarget = { boxId: number; index: number; direction: number };
 type Target = { object: Object3D; boxId?: number; lever?: LeverTarget; activate?: () => void; panel: boolean; wall?: { boxId: number; index: number }; boxObject?: Object3D; hit: Vector3 };
 type Hand = { source: XRInputSource | null; down: boolean; target: Target | null; anchor: Vector3; phase: LeverPhase; slideDirection: number; tracked: boolean; wallStart: number; radius: number };
 type Grab = { id: number; object: Object3D; origin: Pose; start: [Point3, Point3]; candidate: Pose; extra: Pose };
 
 // The viewer and controllers share a rig; the clipboard follows the left grip while held.
-export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint, children }: Props) {
+export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint, children, exploration }: Props) {
   const { gl, scene, camera } = useThree();
-  const latest = useRef({ lab, dispatch, onHint }); latest.current = { lab, dispatch, onHint };
+  const latest = useRef({ lab, dispatch, onHint, exploration }); latest.current = { lab, dispatch, onHint, exploration };
   const board = useRef<Group>(null);
   const feedback = useRef<() => void>(() => undefined);
   const supports = useRef(new Map<number, number | null>());
@@ -31,6 +32,16 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     const saved = { position: camera.position.clone(), quaternion: camera.quaternion.clone(), fov: camera instanceof PerspectiveCamera ? camera.fov : 48 };
     const ray = new Raycaster(); ray.far = 5;
     let grab: Grab | null = null, active = false, message = '';
+    let explorationKey = '';
+    const resetExploration = () => {
+      const config = latest.current.exploration;
+      if (!config) return;
+      const key = `${config.key}:${config.revision}:${config.mode}`;
+      if (key === explorationKey) return;
+      clear(true); explorationKey = key;
+      const p = explorationStart(config); rig.position.set(p.x, p.y, p.z); rig.rotation.set(0, p.yaw, 0);
+      menuIndex = -1;
+    };
     let audio: AudioContext | null = null, menuIndex = -1, menuCooldown = 0;
     let focused: Object3D | null = null;
     const restoreWall = (h: Hand) => { if (h.target?.wall) h.target.object.userData.xrHeld = false; };
@@ -150,7 +161,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     });
     const visibility = () => { if (gl.xr.getSession()?.visibilityState !== 'visible') clear(true); };
     const start = () => {
-      clear(true); active = true; rig.position.set(0, 0, 3); rig.rotation.set(0, 0, 0);
+      clear(true); active = true; explorationKey = ''; rig.position.set(0, 0, 3); rig.rotation.set(0, 0, 0); resetExploration();
       saved.position.copy(camera.position); saved.quaternion.copy(camera.quaternion);
       if (camera instanceof PerspectiveCamera) saved.fov = camera.fov;
       rig.add(camera); camera.position.set(0, 0, 0); camera.quaternion.identity();
@@ -168,6 +179,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     gl.xr.addEventListener('sessionstart', start); gl.xr.addEventListener('sessionend', end);
     tick.current = (dt, frame) => {
       if (!active || !frame) return;
+      resetExploration();
       const session = gl.xr.getSession(), space = gl.xr.getReferenceSpace();
       if (!session || !space || session.visibilityState !== 'visible') { clear(true); if (board.current) board.current.visible = false; return; }
       const viewer = frame.getViewerPose(space);
@@ -204,8 +216,19 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const headYaw = Math.atan2(-forward.x,-forward.z);
       if (!menu && !hands.some(h => h.down || h.source?.gamepad?.buttons[0]?.pressed)) {
         const nav = navigationInput(pads,dt);
+        const config = latest.current.exploration;
+        if (config?.vehicle && config.mode === 'fly') {
+          nav.forward = navigationInput({ left: null, right: pads.right }, dt).forward;
+          const lift = pads.left?.axes[3] ?? 0;
+          if (Math.abs(lift) > .18) rig.position.y -= lift * Math.min(dt, .05) * 1.5;
+        }
         const next = navigateRig({ x:rig.position.x,y:rig.position.y,z:rig.position.z,yaw:rig.rotation.y },viewer.transform.position,headYaw,nav);
-        rig.position.set(next.x,next.y,next.z); rig.rotation.y=next.yaw; rig.updateMatrixWorld(true);
+        const bounded = config ? constrainExploration(next, viewer.transform.position, config) : next;
+        rig.position.set(bounded.x,bounded.y,bounded.z); rig.rotation.y=bounded.yaw; rig.updateMatrixWorld(true);
+      }
+      if (latest.current.exploration?.vehicle) {
+        const bounded = constrainExploration({ x:rig.position.x, y:rig.position.y, z:rig.position.z, yaw:rig.rotation.y }, viewer.transform.position, latest.current.exploration);
+        rig.position.set(bounded.x, bounded.y, bounded.z); rig.updateMatrixWorld(true);
       }
       if (grab) {
         const held = grab, b = latest.current.lab.boxes.find(b => b.id === held.id);

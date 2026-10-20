@@ -75,7 +75,7 @@ export function Scene3D({
 
   return (
     <div className="scene-shell">
-      <Canvas shadows onPointerMissed={() => onSelectObject(null)}>
+      <Canvas frameloop="demand" shadows onPointerMissed={() => onSelectObject(null)}>
         <PerspectiveCamera makeDefault position={[1.9, 1.7, 2.4]} fov={48} />
         <color attach="background" args={['#eef2f5']} />
         <ambientLight intensity={0.75} />

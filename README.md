@@ -368,3 +368,24 @@ Os 62 testes automatizados cobrem regras de montagem, navegação, alcance, capt
 
 ### Apoio provisório e gravidade em VR
 Ao soltar acima de uma base pronta, mais de 50% da área horizontal sobreposta mantém a caixa apoiada na altura do topo, sem travá-la. É possível agarrar novamente para ajustar; somente o encaixe dos pés confirma a trava. A base não pode ser alterada enquanto sustenta esse apoio. A gravidade das paredes é uma aproximação angular: após iniciar uma dobra válida (cerca de 7 graus), a parede acelera até fechar. Tentativas inválidas em VR piscam em vermelho e retornam. Luvas estilizadas acompanham os controles e fecham proporcionalmente ao gatilho. Não se trata de rastreamento óptico dos dedos nem de simulação física industrial.
+
+## Shared VR workspace
+
+All three modules use one persistent WebXR session and clipboard. The three buttons
+at the top switch modules without losing the product, cargo or assembly state.
+Use the floating **Entrar em VR** button from the selected desktop module.
+Hold the left grip to show the clipboard. Point and press the right trigger, or
+use the right stick to select a command and confirm with its trigger.
+
+In cargo loading, walking uses the cargo-floor datum (rig height zero), preserves
+the user's tracked eye height, and bounds the headset to the equipment envelope
+plus 2 m on every side. This is an inspection mode: walls/cargo do not block the
+viewer. Flight keeps the same horizontal boundary and allows rig heights 0–10 m:
+right stick moves horizontally; left stick turns and raises/lowers the viewer.
+The elevated-view shortcut starts at 4 m with a diagonal heading; look down naturally
+with the headset. Walking/inside/outside shortcuts return to floor level.
+
+Clipboard actions operate the same desktop state and loading validation. Configure
+custom equipment dimensions and product details on desktop before entering VR.
+WebXR requires a compatible browser and HTTPS (localhost is allowed). Automated
+navigation tests do not replace physical Quest validation.

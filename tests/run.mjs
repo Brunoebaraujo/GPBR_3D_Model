@@ -613,5 +613,36 @@ try {
     assert.equal(rest.boxes[1].restingOn,base.id); assert.equal(rest.boxes[1].support,null);
     const floor=reduceLab(rest,{type:'unstack'});assert.equal(floor.boxes[1].pose.y,0);assert.equal(floor.boxes[1].restingOn,null);
   });
+  const { constrainExploration, explorationStart } = await load('utils/xrNavigation.js');
+  test('VR walking stays at cargo floor and clamps actual headset to the 2m perimeter', () => {
+    for (const kind of ['truck', 'container-20-dry', 'container-40-reefer']) {
+      const vehicle = ROAD_PRESETS[kind];
+      const config = { key:'road', mode:'walk', vehicle, view:'entry', revision:0 };
+      for (const yaw of [0, Math.PI/2, Math.PI, -.7]) {
+        for (const sign of [-1, 1]) {
+          const viewer = { x:1.3, y:1.7, z:-.8 };
+          const result = constrainExploration({x:sign*100,y:5,z:sign*100,yaw},viewer,config);
+          const worldX=result.x+viewer.x*Math.cos(yaw)+viewer.z*Math.sin(yaw);
+          const worldZ=result.z-viewer.x*Math.sin(yaw)+viewer.z*Math.cos(yaw);
+          assert.ok(Math.abs(worldX)<=vehicle.width/2000+2+1e-8);
+          assert.ok(Math.abs(worldZ)<=vehicle.length/2000+2+1e-8);
+          assert.equal(result.y,0);
+          assert.equal(viewer.y,1.7);
+        }
+      }
+    }
+  });
+  test('VR flight supports elevated views and returns to floor without changing eye height', () => {
+    const config={key:'road',mode:'fly',vehicle:ROAD_PRESETS['container-40-dry'],view:'overview',revision:1};
+    const elevated=explorationStart(config);
+    assert.equal(elevated.y,4); assert.equal(elevated.yaw,Math.PI/4);
+    assert.equal(constrainExploration({...elevated,y:100},{x:0,y:1.6,z:0},config).y,10);
+    assert.equal(constrainExploration({...elevated,y:-10},{x:0,y:1.6,z:0},config).y,0);
+    assert.equal(constrainExploration(elevated,{x:0,y:1.6,z:0},{...config,mode:'walk'}).y,0);
+    assert.equal(explorationStart({...config,view:'inside'}).y,0);
+    const tandem={...ROAD_PRESETS.bitrem,length:7000,width:2500,height:2600,secondBody:{length:8000,width:2400,height:2500}};
+    const limited=constrainExploration({x:100,y:0,z:100,yaw:0},{x:0,y:1.6,z:0},{...config,vehicle:tandem});
+    assert.equal(limited.z,sceneLength(tandem)/2000+2);
+  });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }

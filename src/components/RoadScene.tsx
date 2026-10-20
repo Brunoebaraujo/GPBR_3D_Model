@@ -64,7 +64,8 @@ function Vehicle({
   opacity,
   roof,
   sides,
-}: Pick<Props, "state" | "opacity" | "roof" | "sides">) {
+  vr = false,
+}: Pick<Props, "state" | "opacity" | "roof" | "sides"> & { vr?: boolean }) {
   const v = state.vehicle,
     bodies = cargoBodies(v),
     length = sceneLength(v) / 1000,
@@ -127,7 +128,7 @@ function Vehicle({
                 </mesh>
               )),
             )}
-            {bodies.length > 1 && (
+            {!vr && bodies.length > 1 && (
               <Html position={[w / 2 + 0.55, h + 0.2, 0]} center>
                 <span className="road-label">COMPARTIMENTO {index + 1}</span>
               </Html>
@@ -163,12 +164,12 @@ function Vehicle({
           <meshStandardMaterial color="#26313c" />
         </mesh>
       ))}
-      <Html position={[0, 2.05, -length / 2 - 1.2]} center>
+      {!vr && <Html position={[0, 2.05, -length / 2 - 1.2]} center>
         <span className="road-label front-label">FRENTE</span>
-      </Html>
-      <Html position={[0, 0, length / 2 + 0.4]} center>
+      </Html>}
+      {!vr && <Html position={[0, 0, length / 2 + 0.4]} center>
         <span className="road-label">TRASEIRA</span>
-      </Html>
+      </Html>}
     </group>
   );
 }
@@ -180,6 +181,7 @@ function UnitMesh({
   onSelect,
   offset = [0, 0, 0],
   worldOffset = 0,
+  vr = false,
 }: {
   unit: RoadUnit;
   index: number;
@@ -188,6 +190,7 @@ function UnitMesh({
   onSelect: Props["onSelect"];
   offset?: number[];
   worldOffset?: number;
+  vr?: boolean;
 }) {
   const d = footprint(unit),
     w = d.width / 1000,
@@ -240,7 +243,7 @@ function UnitMesh({
           color="#c2cbd0"
         />
       )}
-      <Html
+      {!vr && <Html
         position={[0, h / 2 + 0.03, 0]}
         center
         zIndexRange={[20, 0]}
@@ -250,7 +253,7 @@ function UnitMesh({
           {unit.model} · {index + 1}
           {unit.locked ? " 🔒" : ""}
         </span>
-      </Html>
+      </Html>}
     </group>
   );
 }
@@ -408,7 +411,7 @@ function SceneContent(props: Props) {
 }
 export function RoadScene(props: Props) {
   return (
-    <Canvas shadows>
+    <Canvas frameloop="demand" shadows>
       <PerspectiveCamera
         makeDefault
         position={[12, 10, 14]}
@@ -420,4 +423,15 @@ export function RoadScene(props: Props) {
       <SceneContent {...props} />
     </Canvas>
   );
+}
+
+// Same cargo geometry and coordinates as the desktop, without desktop camera controls.
+export function RoadVRScene({ state, selected, opacity, roof, sides, onSelect }: Pick<Props, 'state' | 'selected' | 'opacity' | 'roof' | 'sides' | 'onSelect'>) {
+  const result = validateRoad(state);
+  return <><Vehicle state={state} opacity={opacity} roof={roof} sides={sides} vr />
+    {state.units.map((unit, index) => <group key={unit.id} userData={{ activate: () => onSelect(unit.id, false) }}>
+      <UnitMesh vr unit={unit} index={index} selected={selected.includes(unit.id)} invalid={result.invalidIds.has(unit.id)} onSelect={onSelect} worldOffset={bodyOffset(state.vehicle, unit.compartment ?? 0)} />
+    </group>)}
+    <gridHelper args={[80, 80, '#34626d', '#253b48']} />
+  </>;
 }
