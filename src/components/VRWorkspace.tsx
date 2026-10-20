@@ -9,6 +9,7 @@ import { Crate, type MouseTool } from './MB6Parts';
 import { XRInteraction } from './XRInteraction';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import './vr.css';
+import { unlockAssemblyAudio } from '../utils/assemblyAudio';
 
 type Vec = [number, number, number];
 type ViewRequest = { kind: 'front' | 'back' | 'overview' | 'corner'; pose: Pose; corner?: number };
@@ -25,7 +26,21 @@ function CameraView({ request, presenting }: { request: ViewRequest | null; pres
       const dx = kind === 'corner' ? ([1, 1, -1, -1][c] * 1.8) : direction * 0.2;
       const dz = kind === 'corner' ? ([1, -1, -1, 1][c] * 2.2) : direction * 2.6;
       camera.position.set(pose.x + dx * Math.cos(pose.yaw) + dz * Math.sin(pose.yaw), pose.y + 1.25, pose.z - dx * Math.sin(pose.yaw) + dz * Math.cos(pose.yaw));
-      orbit.target.set(pose.x, pose.y + 0.7, pose.z); orbit.update();
+      orbit.target.set(pose.x, pose.y + 0.7, pose.z);
+      if (kind === 'corner') {
+        // Bolts are mounted on the front/back panels, facing out from those faces.
+        const side = c === 0 || c === 3 ? 1 : -1;
+        const x = [1, 1, -1, -1][c] * (MB6.w / 2 - .14);
+        const z = side * (MB6.d / 2 + .025);
+        const world = (lx: number, lz: number) => [
+          pose.x + lx * Math.cos(pose.yaw) + lz * Math.sin(pose.yaw),
+          pose.z - lx * Math.sin(pose.yaw) + lz * Math.cos(pose.yaw),
+        ];
+        const [tx, tz] = world(x, z), [cx, cz] = world(x, z + side * .95);
+        orbit.target.set(tx, pose.y + MB6.h - .105, tz);
+        camera.position.set(cx, pose.y + MB6.h - .055, cz);
+      }
+      orbit.update();
     }
     orbit.update();
   }, [camera, controls, request, presenting]);
@@ -51,6 +66,14 @@ function Label({ text, position, action, width = 1.1, height = 0.045, color = '#
 }
 
 export function VRWorkspace({ activeModule, onNavigate }: { activeModule: StudioModule; onNavigate: (module: StudioModule) => void }) {
+  useEffect(() => {
+    window.addEventListener('pointerdown', unlockAssemblyAudio);
+    window.addEventListener('keydown', unlockAssemblyAudio);
+    return () => {
+      window.removeEventListener('pointerdown', unlockAssemblyAudio);
+      window.removeEventListener('keydown', unlockAssemblyAudio);
+    };
+  }, []);
   const data = useVRModule(activeModule);
   const [flight, setFlight] = useState(false);
   const [viewpoint, setViewpoint] = useState<{ view: Exploration['view']; revision: number }>({ view: 'entry', revision: 0 });
@@ -77,6 +100,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
     void check(); return () => { alive = false; };
   }, []);
   const enter = async () => {
+    unlockAssemblyAudio();
     if (!renderer || !navigator.xr || pending) return;
     setPending(true); setModule('vr');
     let session: XRSession | undefined;

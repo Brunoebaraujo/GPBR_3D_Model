@@ -3,6 +3,7 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Edges, TransformControls } from '@react-three/drei';
 import { CanvasTexture, Group, Vector3, Mesh, MeshStandardMaterial, Color } from 'three';
 import { MB6, WALL_PIVOT_Y, WALL_SEATING_TRAVEL, MB6_VISUAL_COLLAPSED, wallMotion, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
+import { playAssemblySound } from '../utils/assemblyAudio';
 
 type Vec = [number, number, number];
 export type MouseTool = 'assemble' | 'translate' | 'rotate';
@@ -58,6 +59,13 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
   const root = useRef<Group>(null);
   const originalColors = useRef(new Map<MeshStandardMaterial, Color>());
   const handle = useRef<Group>(null), carriage = useRef<Group>(null);
+  const wasLocked = useRef(box.locks[index]);
+  const clickPending = useRef(false);
+  useEffect(() => {
+    if (box.locks[index] && !wasLocked.current) clickPending.current = true;
+    if (!box.locks[index]) clickPending.current = false;
+    wasLocked.current = box.locks[index];
+  }, [box.locks, index]);
   const operate = (step: LeverStep) => act({ type: 'lever', index, step });
   // Click toggles the hinged handle; horizontal drag operates the sliding bolt.
   const gesture = useGesture(interaction, `Alavanca ${index + 1}: clique para ${raised ? 'rebater' : 'levantar'}; arraste na horizontal para deslizar o ferrolho.`, () => operate(raised ? 'lower' : 'lift'), (dx, dy) => operate(leverGesture(dx, dy)));
@@ -73,6 +81,9 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
     const speed = Math.min(1, dt * 12);
     if (handle.current) handle.current.rotation.x += ((raised ? -1.15 : 0) - handle.current.rotation.x) * speed;
     if (carriage.current) carriage.current.position.x += ((bolt ? direction * 0.038 : 0) - carriage.current.position.x) * speed;
+    if (clickPending.current && handle.current && Math.abs(handle.current.rotation.x) < .025) {
+      playAssemblySound('click'); clickPending.current = false;
+    }
   });
   return <group ref={root} position={[x, height - 0.035, 0.032]} {...gesture.events} userData={{ xrLever: { boxId: box.id, index, direction }, activate: () => operate(raised ? 'lower' : 'lift') }}>
     <Part position={[0, 0, 0]} size={[0.15, 0.05, 0.014]} />
@@ -93,6 +104,7 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
 function Wall({ index, box, act, interaction }: { index: number; box: Assembly; act: (a: Action) => void; interaction: Interaction }) {
   const ref = useRef<Group>(null), raised = box.walls[index];
   const velocity = useRef(0);
+  const soundMotion = useRef({ angle: -Math.PI / 2, lift: index === 0 ? WALL_SEATING_TRAVEL : 0, moving: false, lastCreak: -Infinity });
   const wallData = useMemo(() => ({ xrWall: { boxId: box.id, index }, xrHeld: false, invalidUntil: 0 }), [box.id,index]);
   const width = (index % 2 ? MB6.d : MB6.w) - 0.06;
   const pivot = WALL_PIVOT_Y[index];
@@ -105,6 +117,16 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
     wall.traverse(o=>{if(o instanceof Mesh && o.material instanceof MeshStandardMaterial){if(!o.userData.originalEmissive)o.userData.originalEmissive=o.material.emissive.clone();o.material.emissive.copy(o.userData.originalEmissive);if(flash)o.material.emissive.set('#ff0000');o.material.emissiveIntensity=flash?1:.3;}});
     const next = wallMotion(index, wall.rotation.x, wall.position.y, velocity.current, raised, !!wall.userData.xrHeld, dt);
     wall.rotation.x=next.angle; wall.position.y=next.lift; velocity.current=next.velocity;
+    const sound = soundMotion.current, now = performance.now();
+    const moving = Math.abs(next.angle - sound.angle) + Math.abs(next.lift - sound.lift) > .00001;
+    if (moving && now - sound.lastCreak > 145) {
+      playAssemblySound('creak'); sound.lastCreak = now;
+    }
+    if (sound.moving && next.angle === -Math.PI / 2 && !wall.userData.xrHeld) {
+      playAssemblySound('impact'); sound.moving = false;
+    } else if (moving) sound.moving = true;
+    else if (next.angle === 0 && next.lift === 0) sound.moving = false;
+    sound.angle = next.angle; sound.lift = next.lift;
   });
   return <group position={location} rotation={[0, [0, Math.PI / 2, Math.PI, -Math.PI / 2][index], 0]}>
     <Part position={[0, (0.07 - pivot) / 2, 0]} size={[width - 0.09, pivot - 0.07, 0.014]} />
@@ -128,6 +150,12 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
 
 function Lid({ box, act, interaction }: { box: Assembly; act: (a: Action) => void; interaction: Interaction }) {
   const ref = useRef<Group>(null);
+  const wasClosed = useRef(box.lid), impactPending = useRef(false);
+  useEffect(() => {
+    if (box.lid && !wasClosed.current) impactPending.current = true;
+    if (!box.lid) impactPending.current = false;
+    wasClosed.current = box.lid;
+  }, [box.lid]);
   const height = box.walls.some(Boolean) ? MB6.h - 0.035 : MB6_VISUAL_COLLAPSED - 0.006;
   // Keep the initial JSX transform stable: changing wall height must not teleport
   // the removed lid back onto the crate before the next animation frame.
@@ -137,6 +165,9 @@ function Lid({ box, act, interaction }: { box: Assembly; act: (a: Action) => voi
   useFrame((_, dt) => {
     target.current.set(0, box.lid ? height : 0.025, box.lid ? 0 : 1.7);
     ref.current?.position.lerp(target.current, Math.min(1, dt * 8));
+    if (impactPending.current && ref.current && ref.current.position.distanceTo(target.current) < .015) {
+      playAssemblySound('impact'); impactPending.current = false;
+    }
   });
   return <group ref={ref} position={initialPosition} {...gesture.events} userData={{ activate: () => act({ type: 'lid' }) }}>
     <Part position={[0, 0, 0]} size={[MB6.w - 0.12, 0.012, MB6.d - 0.12]} color="#dfe7eb" highlight={gesture.hovered} />
@@ -144,6 +175,11 @@ function Lid({ box, act, interaction }: { box: Assembly; act: (a: Action) => voi
 }
 
 export function Crate({ box, selected, tool, dispatch, onPose, interaction }: { box: Assembly; selected: boolean; tool: MouseTool; dispatch: (a: Action) => void; onPose: (id: number, pose: Pose) => Pose; interaction: Interaction }) {
+  const previousSupport = useRef(box.support);
+  useEffect(() => {
+    if (box.support !== null && box.support !== previousSupport.current) playAssemblySound('celebrate');
+    previousSupport.current = box.support;
+  }, [box.support]);
   const [group, setGroup] = useState<Group | null>(null);
   const act = (a: Action) => { dispatch({ type: 'select', id: box.id }); dispatch(a); };
   const commit = () => {
