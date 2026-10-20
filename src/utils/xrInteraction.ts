@@ -10,7 +10,7 @@ export function navigationInput(pads: { left: XRPad | null; right: XRPad | null 
   const x = axis(pads.right, 2), leftZ = axis(pads.left, 3), rightZ = axis(pads.right, 3), z = Math.abs(leftZ) > Math.abs(rightZ) ? leftZ : rightZ, length = Math.max(1, Math.hypot(x, z));
   return { turn: axis(pads.left, 2) * time * 1.1, strafe: x / length * time * 1.2, forward: -z / length * time * 1.2 || 0 };
 }
-export const canGrabBox = (lab: Lab, box: Assembly) => ready(box) && box.support === null && !lab.boxes.some(other => other.support === box.id);
+export const canGrabBox = (lab: Lab, box: Assembly) => ready(box) && box.support === null && !lab.boxes.some(other => (other.support === box.id || other.restingOn === box.id));
 export const midpoint = (a: Point3, b: Point3): Point3 => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 });
 export function grabbedPose(origin: Pose, start: [Point3, Point3], current: [Point3, Point3], liftGain = 1): Pose {
   const initial = midpoint(...start), now = midpoint(...current);

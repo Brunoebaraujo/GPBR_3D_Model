@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Edges, TransformControls } from '@react-three/drei';
-import { CanvasTexture, Group, Vector3 } from 'three';
+import { CanvasTexture, Group, Vector3, Mesh, MeshStandardMaterial } from 'three';
 import { MB6, WALL_PIVOT_Y, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
 
 type Vec = [number, number, number];
@@ -81,12 +81,20 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
 
 function Wall({ index, box, act, interaction }: { index: number; box: Assembly; act: (a: Action) => void; interaction: Interaction }) {
   const ref = useRef<Group>(null), raised = box.walls[index];
+  const velocity = useRef(0);
   const width = (index % 2 ? MB6.d : MB6.w) - 0.06;
   const pivot = WALL_PIVOT_Y[index];
   const location: Vec = index === 0 ? [0, pivot, MB6.d / 2 - 0.025] : index === 1 ? [MB6.w / 2 - 0.025, pivot, 0] : index === 2 ? [0, pivot, -MB6.d / 2 + 0.025] : [-MB6.w / 2 + 0.025, pivot, 0];
   const height = MB6.h - 0.035 - location[1];
   const gesture = useGesture(interaction, `${raised ? 'Dobrar' : 'Levantar'} parede: clique ou arraste ${raised ? 'para baixo' : 'para cima'}.`, () => act({ type: 'wall', index }), (_, dy) => { if ((dy < -6 && !raised) || (dy > 6 && raised)) act({ type: 'wall', index }); });
-  useFrame((_, dt) => { if (ref.current && !ref.current.userData.xrHeld) ref.current.rotation.x += ((raised ? 0 : -Math.PI / 2) - ref.current.rotation.x) * Math.min(1, dt * 9); });
+  useFrame((_, dt) => {
+    const wall=ref.current; if(!wall) return;
+    const flash=performance.now()<(wall.userData.invalidUntil??0) && Math.floor(performance.now()/100)%2===0;
+    wall.traverse(o=>{if(o instanceof Mesh && o.material instanceof MeshStandardMaterial){if(!o.userData.originalEmissive)o.userData.originalEmissive=o.material.emissive.clone();o.material.emissive.copy(o.userData.originalEmissive);if(flash)o.material.emissive.set('#ff0000');o.material.emissiveIntensity=flash?1:.3;}});
+    if(wall.userData.xrHeld){velocity.current=0;return;}
+    if(raised){velocity.current=0;wall.rotation.x+=(0-wall.rotation.x)*Math.min(1,dt*9);}
+    else {const step=Math.min(dt,.04);velocity.current+=Math.max(.8,9.81*Math.sin(-wall.rotation.x))*step;wall.rotation.x=Math.max(-Math.PI/2,wall.rotation.x-velocity.current*step);if(wall.rotation.x<=-Math.PI/2)velocity.current=0;}
+  });
   return <group position={location} rotation={[0, [0, Math.PI / 2, Math.PI, -Math.PI / 2][index], 0]}>
     <Part position={[0, (0.07 - pivot) / 2, 0]} size={[width - 0.09, pivot - 0.07, 0.014]} />
     {/* Fixed U sockets capture the rotating lower rail. */}
