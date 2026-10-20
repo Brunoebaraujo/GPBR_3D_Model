@@ -203,7 +203,7 @@ try {
   test('Road weight includes tare and missing capacity is explicitly unverified', () => {
     const r=validateRoad({...truck,units:[base]});
     assert.equal(r.total,1115);assert.equal(r.cargo,1000);assert.equal(r.tare,115);
-    assert.equal(r.valid,true);assert.ok(r.notices.some(n=>n.includes('peso do veículo não validado')));
+    assert.equal(r.valid,true);assert.ok(r.notices.some(n=>n.includes('peso embarcado não validado')));
     assert.equal(validateRoad({...truck,vehicle:{...truck.vehicle,capacityKg:1114},units:[base]}).valid,false);
     assert.equal(validateRoad({...truck,units:[{...base,cargoKg:1651}]}).valid,false);
   });
@@ -264,11 +264,27 @@ try {
     assert.equal(validateRoad({...truck,units:[base,{...base}]}).valid,false);
   });
   const { findRoadBatch, ROAD_REFERENCES, dimensionsReady, bodyOffset, sceneLength, stackIds } = await load('utils/roadLoading.js');
+  test('Containers accept both Goodpack models and enforce payload and entry limits', () => {
+    const containers=Object.values(ROAD_PRESETS).filter(v=>v.kind.startsWith('container-'));
+    assert.equal(containers.length,6);
+    for(const vehicle of containers) {
+      assert.equal(dimensionsReady(vehicle),true);
+      for(const model of ['MB5','MB6']) {
+        const state={vehicle,units:[],gap:10};
+        const unit=makeRoadUnit(model,1000,`${vehicle.kind}-${model}`);
+        const batch=findRoadBatch(state,unit,1);
+        assert.ok(batch);
+        assert.equal(validateRoad({...state,units:batch}).valid,true);
+        assert.equal(findRoadBatch({...state,vehicle:{...vehicle,capacityKg:1}},unit,1),null);
+        assert.equal(findRoadBatch({...state,vehicle:{...vehicle,rearHeight:1,loading:'side-rear'}},unit,1),null);
+      }
+    }
+  });
   test('All nine vehicle profiles preserve reference ranges without inventing dimensions or payload', () => {
-    assert.equal(Object.keys(ROAD_PRESETS).length,9);
+    assert.equal(Object.keys(ROAD_PRESETS).length,15);
     assert.equal(ROAD_REFERENCES.vuc.payload,'1,5–3 t');
     assert.equal(ROAD_REFERENCES.rodotrem.width,'2,45–2,50 m');
-    for(const [kind,v] of Object.entries(ROAD_PRESETS)) {
+    for(const [kind,v] of Object.entries(ROAD_PRESETS).filter(([kind]) => !kind.startsWith("container-"))) {
       assert.equal(v.capacityKg,null);
       if(!['truck','sider'].includes(kind)) {assert.equal(v.length,0);assert.equal(v.height,0);assert.equal(dimensionsReady(v),false);assert.equal(findRoadBatch({...truck,vehicle:v},base,2),null);}
     }

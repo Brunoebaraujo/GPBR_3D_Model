@@ -210,6 +210,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       if (grab) {
         const held = grab, b = latest.current.lab.boxes.find(b => b.id === held.id);
         if (!b || !canGrabBox(latest.current.lab, b)) { clear(true); return; }
+        const previousCandidate = held.candidate;
         const input = heldBoxInput(pads,b.restingOn ? dt*.2 : dt), heading=rig.rotation.y+headYaw;
         held.extra.x += input.strafe*Math.cos(heading)-input.forward*Math.sin(heading);
         held.extra.z -= input.strafe*Math.sin(heading)+input.forward*Math.cos(heading);
@@ -223,7 +224,12 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         const preview = reduceLab(state, { type: 'move', pose: held.candidate });
         const accepted = preview.boxes.find(box => box.id === held.id)!;
         if (accepted !== b) { held.candidate = accepted.pose; applyPose(held.object, accepted.pose); hint('Caixa segura: analógico direito sobe/desce; esquerdo aproxima e gira. Alinhe para encaixar automaticamente.'); }
-        else hint('Movimento bloqueado: eleve a caixa antes de aproximá-la da outra.');
+        else {
+          // Release must use the last displayed, valid pose. A rejected controller
+          // sample must not silently replace it and send the box back to its origin.
+          held.candidate = previousCandidate;
+          hint('Movimento bloqueado: eleve a caixa antes de aproximá-la da outra.');
+        }
       } else hands.forEach((h, i) => {
         const target = h.target;
         if (!h.down || !h.tracked || !target) return;

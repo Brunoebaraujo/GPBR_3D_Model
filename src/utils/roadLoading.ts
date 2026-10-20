@@ -9,13 +9,17 @@ export type VehicleKind =
   | "ls"
   | "sider"
   | "bitrem"
-  | "rodotrem";
+  | "rodotrem"
+  | "container-20-dry" | "container-40-dry"
+  | "container-20-hc" | "container-40-hc"
+  | "container-20-reefer" | "container-40-reefer";
 export interface CargoBody {
   length: number;
   width: number;
   height: number;
 }
 export interface RoadVehicle {
+  sourceUrl?: string;
   kind: VehicleKind;
   secondBody?: CargoBody;
   loading?: "rear" | "side-rear";
@@ -106,6 +110,12 @@ export const ROAD_REFERENCES: Record<
     width: "2,45–2,50 m",
     loading: "Traseiro ou sider",
   },
+  "container-20-dry": { name: "Contêiner 20 pés · Dry", payload: "28.130 kg", width: "2,352 m", loading: "Traseiro" },
+  "container-40-dry": { name: "Contêiner 40 pés · Dry", payload: "28.750 kg", width: "2,352 m", loading: "Traseiro" },
+  "container-20-hc": { name: "Contêiner 20 pés · HC", payload: "Confirmar", width: "2,352 m", loading: "Traseiro" },
+  "container-40-hc": { name: "Contêiner 40 pés · HC", payload: "28.600 kg", width: "2,350 m", loading: "Traseiro" },
+  "container-20-reefer": { name: "Contêiner 20 pés · Reefer", payload: "29.140 kg", width: "2,280 m", loading: "Traseiro" },
+  "container-40-reefer": { name: "Contêiner 40 pés · Reefer HC", payload: "29.580 kg", width: "2,290 m", loading: "Traseiro" },
 };
 const emptyProfile = (kind: VehicleKind): RoadVehicle => ({
   kind,
@@ -138,6 +148,21 @@ Object.assign(ROAD_PRESETS.sider, {
   rearHeight: 2690,
   sideHeight: 2700,
 });
+// Reference examples checked 2026-10-20; mm and payload excluding container tare.
+// 20 HC source has inconsistent weight labels and no door sizes: leave these unknown.
+const containerSpecs: [VehicleKind, number, number, number, number | null, number | null, number | null, string][] = [
+  ["container-20-dry", 5900, 2352, 2395, 28130, 2340, 2292, "20-standard"],
+  ["container-40-dry", 12032, 2352, 2395, 28750, 2340, 2292, "40-standard"],
+  ["container-20-hc", 5898, 2352, 2698, null, null, null, "https://www.dolphincontainer.com/en/container/20-hc.html"],
+  ["container-40-hc", 12032, 2350, 2700, 28600, 2340, 2597, "40-standard-high-cube"],
+  ["container-20-reefer", 5450, 2280, 2159, 29140, 2290, 2264, "20-reefer"],
+  ["container-40-reefer", 11599, 2290, 2425, 29580, 2290, 2557, "40-reefer-high-cube"],
+];
+for (const [kind, length, width, height, capacityKg, rearWidth, rearHeight, source] of containerSpecs) {
+  Object.assign(ROAD_PRESETS[kind], { length, width, height, capacityKg, rearWidth, rearHeight,
+    sourceUrl: source.startsWith("https:") ? source : `https://www.hapag-lloyd.com/en/services-information/cargo-fleet/container/${source}.html` });
+}
+export const isContainer = (v: RoadVehicle) => v.kind.startsWith("container-");
 export const cargoBodies = (v: RoadVehicle): CargoBody[] =>
   v.secondBody ? [v, v.secondBody] : [v];
 export const dimensionsReady = (v: RoadVehicle) =>
@@ -151,7 +176,7 @@ export const bodyOf = (
 export const sameBody = (a: RoadUnit, b: RoadUnit) =>
   (a.compartment ?? 0) === (b.compartment ?? 0);
 export const hasSideAccess = (v: RoadVehicle) =>
-  v.loading ? v.loading === "side-rear" : v.kind === "sider";
+  !isContainer(v) && (v.loading ? v.loading === "side-rear" : v.kind === "sider");
 // Visual coupling spacing only; never counted as usable cargo floor.
 export const couplingGap = (v: RoadVehicle) =>
   v.secondBody ? (v.kind === "rodotrem" ? 3000 : 1800) : 0;
@@ -291,10 +316,10 @@ export function validateRoad(state: RoadState) {
   if (v.capacityKg !== null && total > v.capacityKg + EPS)
     fail("Peso embarcado excede a capacidade útil informada.");
   if (!v.confirmed)
-    notices.push("Medidas de referência: confirmar com a transportadora.");
+    notices.push("Medidas de referência: confirmar com a transportadora ou armador.");
   if (v.capacityKg === null)
     notices.push(
-      "Capacidade útil não informada: peso do veículo não validado.",
+      "Capacidade útil não informada: peso embarcado não validado.",
     );
   if (
     v.rearHeight === null ||
@@ -307,6 +332,8 @@ export function validateRoad(state: RoadState) {
   notices.push(
     "Entrada avaliada conforme inclusão: unidade ou pilha de 2. Percurso, pilares, amarração e cargas por eixo não são simulados.",
   );
+  if (v.kind.includes("reefer"))
+    notices.push("Reefer: ajuste a altura útil à linha de carga e reserve a circulação de ar exigida pelo operador. Refrigeração não simulada.");
   if (v.secondBody)
     notices.push(
       "Capacidade informada é do conjunto; limites individuais dos implementos não foram verificados. Vão de articulação é apenas ilustrativo.",

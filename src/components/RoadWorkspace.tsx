@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { GOODPACK_MODELS, type GoodpackModel } from "../data/skus";
 import {
   findRoadBatch,
+  isContainer,
   bodyOf,
   dimensionsReady,
   hasSideAccess,
@@ -258,7 +259,7 @@ export function RoadWorkspace() {
             </select>
           </label>
           <div className="road-reference">
-            <strong>Referência da sua tabela</strong>
+            <strong>{isContainer(vehicle) ? "Referência do contêiner" : "Referência da sua tabela"}</strong>
             <span>Carga útil aprox.: {reference.payload}</span>
             <span>Largura interna aprox.: {reference.width}</span>
             <span>Carregamento: {reference.loading}</span>
@@ -289,6 +290,7 @@ export function RoadWorkspace() {
               aria-label="Carroceria / acesso"
               value={hasSideAccess(vehicle) ? "side-rear" : "rear"}
               disabled={
+                isContainer(vehicle) ||
                 vehicle.kind === "vuc" ||
                 vehicle.kind === "three-quarter" ||
                 vehicle.kind === "sider"
@@ -299,14 +301,14 @@ export function RoadWorkspace() {
                 })
               }
             >
-              <option value="rear">Baú · traseiro</option>
+              <option value="rear">{isContainer(vehicle) ? "Contêiner · traseiro" : "Baú · traseiro"}</option>
               <option value="side-rear">Sider · lateral e traseiro</option>
             </select>
           </label>
           <p className="muted">
             {vehicle.secondBody
               ? `Medidas do compartimento ${activeCompartment + 1}. Configure os dois antes de carregar.`
-              : "Dimensões úteis reais. Comprimento e altura não constam na tabela enviada."}
+              : isContainer(vehicle) ? "Dimensões internas de referência, editáveis conforme o equipamento real." : "Dimensões úteis reais. Comprimento e altura não constam na tabela enviada."}
           </p>
           <div className="road-fields">
             <NumberField
@@ -351,10 +353,11 @@ export function RoadWorkspace() {
               checked={vehicle.confirmed}
               onChange={(e) => changeVehicle({ confirmed: e.target.checked })}
             />{" "}
-            Medidas conferidas com a transportadora
+            Medidas conferidas com a transportadora / armador
           </label>
           <details>
             <summary>Aberturas e referência</summary>
+            {vehicle.sourceUrl && <p className="muted"><a href={vehicle.sourceUrl} target="_blank" rel="noreferrer">Consultar especificações do contêiner</a>. Valores variam por fabricante. Campos vazios precisam ser confirmados.</p>}
             <NumberField
               label="Altura da porta traseira (mm)"
               value={vehicle.rearHeight}
@@ -771,7 +774,7 @@ export function RoadWorkspace() {
               </div>
               <p className="muted">
                 Origem no centro do piso do compartimento. Y negativo aponta
-                para a cabine. Em grupos, coordenadas da primeira unidade; todas
+                para a frente do equipamento. Em grupos, coordenadas da primeira unidade; todas
                 se movem juntas.
               </p>
               {selectedClearance && (
