@@ -11,7 +11,7 @@ export const WALL_PIVOT_Y = [0.152, 0.080, 0.128, 0.104] as const;
 export const nextWall = (walls: boolean[], raising: boolean) => (raising ? ASSEMBLY_ORDER : FOLD_ORDER).find(i => walls[i] !== raising);
 export type Pose = { x: number; y: number; z: number; yaw: number };
 export type LeverStep = 'lift' | 'slide' | 'lower';
-export type Assembly = { id: number; walls: boolean[]; locks: boolean[]; leverRaised: boolean[]; bolts: boolean[]; lid: boolean; pose: Pose; support: number | null };
+export type Assembly = { id: number; walls: boolean[]; locks: boolean[]; leverRaised: boolean[]; bolts: boolean[]; lid: boolean; pose: Pose; support: number | null; restingOn?: number | null };
 export type Lab = { boxes: Assembly[]; selected: number; message: string };
 export type Action = { type: 'select'; id: number } | { type: 'wall'; index: number } | { type: 'lever'; index: number; step: LeverStep } | { type: 'lid' | 'add' | 'reset' | 'stack' | 'unstack' } | { type: 'move' | 'drop'; pose: Pose };
 export const createBox = (id: number): Assembly => ({ id, walls: [false, false, false, false], locks: [false, false, false, false], leverRaised: [false, false, false, false], bolts: [false, false, false, false], lid: true, pose: { x: id === 1 ? -0.8 : 0.8, y: 0, z: 0, yaw: 0 }, support: null });
@@ -50,6 +50,23 @@ export function captureStackPose(top: Assembly, base: Assembly): Pose | null {
   })) return null;
   return { ...base.pose, y: MB6.h, yaw: base.pose.yaw + (Math.cos(top.pose.yaw-base.pose.yaw)<0 ? Math.PI : 0) };
 }
+// Exact rectangle intersection in the base's horizontal coordinate system.
+export function overlapFraction(top: Pose, base: Pose): number {
+  const a=top.yaw-base.yaw, c=Math.cos(base.yaw), s=Math.sin(base.yaw);
+  const dx=top.x-base.x, dz=top.z-base.z;
+  let polygon=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,z])=>({x:dx*c-dz*s+x*MB6.w/2*Math.cos(a)+z*MB6.d/2*Math.sin(a),z:dx*s+dz*c-x*MB6.w/2*Math.sin(a)+z*MB6.d/2*Math.cos(a)}));
+  for (const [axis,sign,limit] of [['x',1,MB6.w/2],['x',-1,MB6.w/2],['z',1,MB6.d/2],['z',-1,MB6.d/2]] as const) {
+    const input=polygon; polygon=[];
+    input.forEach((b,i)=>{ const a=input[(i+input.length-1)%input.length], da=sign*a[axis]-limit, db=sign*b[axis]-limit;
+      if ((da<=0)!==(db<=0)) { const t=da/(da-db); polygon.push({x:a.x+t*(b.x-a.x),z:a.z+t*(b.z-a.z)}); }
+      if(db<=0) polygon.push(b);
+    });
+  }
+  return Math.abs(polygon.reduce((sum,p,i)=>{const q=polygon[(i+1)%polygon.length];return sum+p.x*q.z-q.x*p.z;},0))/2/(MB6.w*MB6.d);
+}
+export function restingBase(top: Assembly, boxes: Assembly[]): Assembly | undefined {
+  return boxes.find(base=>base.id!==top.id && ready(top) && ready(base) && base.support===null && !base.restingOn && base.pose.y===0 && top.pose.y>=MB6.h-.04 && top.pose.y<=2.5 && overlapFraction(top.pose,base.pose)>.5+1e-8);
+}
 export function reduceLab(state: Lab, action: Action): Lab {
   if (action.type === 'reset') return initialLab();
   if (action.type === 'select') return state.boxes.some(b => b.id === action.id) ? { ...state, selected: action.id } : state;
@@ -63,14 +80,15 @@ export function reduceLab(state: Lab, action: Action): Lab {
   }
   const b = state.boxes.find(box => box.id === state.selected)!;
   const update = (next: Assembly, message: string) => ({ ...state, boxes: state.boxes.map(box => box.id === b.id ? next : box), message });
-  if (state.boxes.some(box => box.support === b.id)) return fail('Desempilhe a caixa superior antes de alterar a base.');
+  if (state.boxes.some(box => (box.support === b.id || box.restingOn === b.id))) return fail('Desempilhe a caixa superior antes de alterar a base.');
   if (action.type === 'unstack') {
-    if (b.support === null) return fail('Esta caixa já está no piso.');
+    if (b.support === null && !b.restingOn) return fail('Esta caixa já está no piso.');
     const x = floorSlot(state.boxes.filter(other => other.id !== b.id), createBox(b.id).pose.x);
-    if (x !== undefined) return update({ ...b, support: null, pose: { x, y: 0, z: 0, yaw: 0 } }, 'Caixa devolvida ao piso.');
+    if (x !== undefined) return update({ ...b, support: null, restingOn: null, pose: { x, y: 0, z: 0, yaw: 0 } }, 'Caixa devolvida ao piso.');
     return fail('Libere espaço no piso antes de desempilhar.');
   }
   if (b.support !== null) return fail('Desempilhe antes de alterar a caixa.');
+  if (b.restingOn && !['move','drop','stack'].includes(action.type)) return fail('Leve a caixa ao piso antes de desmontá-la.');
   if (action.type === 'lid') {
     if (!b.lid && b.leverRaised.some(Boolean)) return fail('Rebata todas as alavancas antes de colocar a tampa.');
     if (!b.lid && !(b.walls.every(Boolean) && b.locks.every(Boolean)) && !b.walls.every(w => !w)) return fail('Monte as quatro paredes e trave os quatro vértices antes de fechar.');
@@ -102,7 +120,7 @@ export function reduceLab(state: Lab, action: Action): Lab {
   if (action.type === 'stack') {
     const base = state.boxes.find(other => fitsStack(b, other));
     if (!base) return fail('Encaixe recusado: complete ambas as caixas e alinhe os quatro pés aos vértices (35 mm).');
-    return update({ ...b, support: base.id, pose: { ...base.pose, y: base.pose.y + MB6.h - MB6.pin, yaw: base.pose.yaw + (Math.cos(b.pose.yaw - base.pose.yaw) < 0 ? Math.PI : 0) } }, 'Encaixe confirmado: quatro pés alinhados aos quatro vértices.');
+    return update({ ...b, support: base.id, restingOn: null, pose: { ...base.pose, y: base.pose.y + MB6.h - MB6.pin, yaw: base.pose.yaw + (Math.cos(b.pose.yaw - base.pose.yaw) < 0 ? Math.PI : 0) } }, 'Encaixe confirmado: quatro pés alinhados aos quatro vértices.');
   }
   if (action.type === 'drop') {
     if (!ready(b)) return fail('Monte, trave e tampe a caixa antes de segurá-la com as duas mãos.');
@@ -110,6 +128,8 @@ export function reduceLab(state: Lab, action: Action): Lab {
     if (!Object.values(p).every(Number.isFinite)) return fail('Posição inválida. A caixa voltou ao ponto de partida.');
     const snapped = state.boxes.map(other => captureStackPose({ ...b, pose: p }, other)).find(Boolean);
     if (snapped) return reduceLab({ ...state, boxes: state.boxes.map(box => box.id === b.id ? { ...box, pose: snapped } : box) }, { type: 'stack' });
+    const base = restingBase({ ...b, pose:p },state.boxes);
+    if(base) return update({...b, restingOn:base.id, pose:{...p,y:MB6.h}},'Apoio provisório: segure novamente e ajuste até ouvir o encaixe.');
     if (Math.abs(p.y) <= 0.08) return reduceLab(state, { type: 'move', pose: { ...p, y: 0 } });
     return fail('Sem apoio válido: alinhe os quatro pés à outra caixa ou solte perto do piso. Caixa devolvida à origem.');
   }
@@ -127,7 +147,7 @@ export function reduceLab(state: Lab, action: Action): Lab {
       return Math.abs(p.x - other.pose.x) < ex + ox - 0.001 && Math.abs(p.z - other.pose.z) < ez + oz - 0.001 && p.y < other.pose.y + boxHeight(other) - 0.001 && p.y + boxHeight(b) > other.pose.y + 0.001;
     });
     if (collision) return fail('Movimento recusado: caixas se sobrepõem. Eleve antes de aproximar.');
-    return update({ ...b, pose: { ...p } }, p.y > 0 ? 'Posição de teste suspensa. Alinhe e confirme o encaixe.' : 'Caixa posicionada no piso.');
+    return update({ ...b, restingOn: null, pose: { ...p } }, p.y > 0 ? 'Posição de teste suspensa. Alinhe e confirme o encaixe.' : 'Caixa posicionada no piso.');
   }
   return state;
 }

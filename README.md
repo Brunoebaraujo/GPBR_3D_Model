@@ -364,4 +364,7 @@ As imagens fornecidas orientam os encaixes inferiores em U, linguetas articulada
 - Soltar perto do piso apoia a caixa. Sem apoio válido ou com rastreamento perdido, retorna à origem. Use Desempilhar antes de levantar uma caixa encaixada. Não é possível levantar a base que sustenta outra.
 - Navegação fica suspensa durante manipulação e uso da prancheta. Colisões são verificadas por posição, sem dinâmica de massa ou colisão contínua.
 
-Os 60 testes automatizados cobrem regras de montagem, navegação, alcance, captura persistente e movimento de paredes. Sessão imersiva, ergonomia e feedback sensorial ainda precisam de validação em Quest 2 físico.
+Os 62 testes automatizados cobrem regras de montagem, navegação, alcance, captura persistente e movimento de paredes. Sessão imersiva, ergonomia e feedback sensorial ainda precisam de validação em Quest 2 físico.
+
+### Apoio provisório e gravidade em VR
+Ao soltar acima de uma base pronta, mais de 50% da área horizontal sobreposta mantém a caixa apoiada na altura do topo, sem travá-la. É possível agarrar novamente para ajustar; somente o encaixe dos pés confirma a trava. A base não pode ser alterada enquanto sustenta esse apoio. A gravidade das paredes é uma aproximação angular: após iniciar uma dobra válida (cerca de 7 graus), a parede acelera até fechar. Tentativas inválidas em VR piscam em vermelho e retornam. Luvas estilizadas acompanham os controles e fecham proporcionalmente ao gatilho. Não se trata de rastreamento óptico dos dedos nem de simulação física industrial.

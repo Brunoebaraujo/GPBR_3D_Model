@@ -1,3 +1,4 @@
+import { controllerHand } from './controllerHand';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
@@ -66,6 +67,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     };
     const controllers = [0, 1].map(i => gl.xr.getController(i));
     const grips = [0, 1].map(i => gl.xr.getControllerGrip(i));
+    const models = grips.map(grip => { const hand=controllerHand(); grip.add(hand.root); return hand; });
     const point = (i: number) => grips[i].getWorldPosition(new Vector3());
     const visible = (object: Object3D) => { for (let p: Object3D | null = object; p; p = p.parent) if (!p.visible) return false; return true; };
     const aim = (i: number): Target | null => {
@@ -99,7 +101,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       if (target.lever) {
         if (hands.some((other, j) => j !== i && other.target?.lever?.boxId === target.lever!.boxId && other.target?.lever?.index === target.lever!.index && other.down)) { h.target = null; return; }
         const b = latest.current.lab.boxes.find(b => b.id === target.lever!.boxId)!;
-        if (b.lid || b.support !== null || latest.current.lab.boxes.some(other => other.support === b.id) || !b.walls[target.lever.index] || !b.walls[(target.lever.index + 1) % 4]) {
+        if (b.lid || b.support !== null || latest.current.lab.boxes.some(other => (other.support === b.id || other.restingOn === b.id)) || !b.walls[target.lever.index] || !b.walls[(target.lever.index + 1) % 4]) {
           hint('Retire a tampa e monte as paredes adjacentes antes de agarrar o ferrolho.'); h.target = null; return;
         }
         send({ type: 'select', id: b.id });
@@ -121,7 +123,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         if (hands.some((other,j) => j !== i && other.down && other.target?.wall?.boxId === b.id && other.target?.wall?.index === target.wall!.index)) { h.target = null; return; }
         const state = reduceLab(latest.current.lab, { type: 'select', id: b.id });
         const probe = reduceLab(state, { type: 'wall', index: target.wall.index });
-        if (probe.boxes === state.boxes) { hint(probe.message); h.target = null; return; }
+        if (probe.boxes === state.boxes) { target.object.userData.invalidUntil=performance.now()+900; if (b.walls[target.wall.index]) target.object.rotation.x=-.16; hint(probe.message); h.target = null; return; }
         send({ type: 'select', id: b.id });
         h.wallStart = b.walls[target.wall.index] ? 0 : -Math.PI / 2;
         const parent = target.object.parent!;
@@ -173,6 +175,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       hands.forEach((h, i) => {
         h.tracked = !!h.source?.gripSpace && !!frame.getPose(h.source.gripSpace, space) && !!frame.getPose(h.source.targetRaySpace, space);
         if (!h.tracked && h.down) { clear(true); hint('Rastreamento perdido: agarre cancelado. A caixa voltou à origem.'); }
+        models[i].root.visible=h.tracked; models[i].update(h.source?.gamepad?.buttons[0]?.value ?? (h.down?1:0),h.source?.handedness==='left');
         beams[i].beam.visible = h.tracked;
         beams[i].beam.material.color.set(h.down ? '#ffcd5c' : '#42e8cc');
       });
@@ -223,11 +226,11 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       } else hands.forEach((h, i) => {
         const target = h.target;
         if (!h.down || !h.tracked || !target) return;
-        if (target.wall && !target.lever) {
+        if (target.wall && !target.lever && target.object.userData.xrHeld) {
           const b = latest.current.lab.boxes.find(b=>b.id===target.wall!.boxId)!;
           const delta = target.object.parent!.worldToLocal(point(i)).sub(h.anchor);
           const angle=wallPullAngle(h.wallStart,h.radius,delta); target.object.rotation.x=angle;
-          if (wallPullComplete(angle,!b.walls[target.wall.index])) {
+          if (wallPullComplete(angle,!b.walls[target.wall.index]) || (b.walls[target.wall.index] && angle < -.12)) {
             send({type:'select',id:b.id}); const result=send({type:'wall',index:target.wall.index});
             restoreWall(h); h.target=null; hint(result.message);
           }
@@ -252,6 +255,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       controllers.forEach((controller, i) => {
         const b = beams[i]; controller.removeEventListener('connected', b.connected); controller.removeEventListener('disconnected', b.disconnected);
         controller.removeEventListener('selectstart', b.down); controller.removeEventListener('selectend', b.up);
+        grips[i].remove(models[i].root); models[i].dispose();
         controller.remove(b.beam); rig.remove(controller, grips[i]); b.beam.geometry.dispose(); b.beam.material.dispose();
       });
       scene.remove(rig); onRenderer(null);

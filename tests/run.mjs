@@ -500,7 +500,7 @@ try {
     const valid=reduceLab(s,{type:'drop',pose:{...base.pose,y:MB6.h-.015}});
     assert.equal(valid.boxes[1].support,base.id); assert.equal(valid.boxes[1].pose.y,MB6.h-MB6.pin);
     assert.deepEqual(valid.boxes[0],base);
-    for(const pose of [{...base.pose,y:MB6.h,yaw:Math.PI/2},{...base.pose,y:.5},{...original.pose,y:1.9},{...base.pose,y:0},{...original.pose,x:NaN}]) {
+    for(const pose of [{...base.pose,y:.5},{...original.pose,y:1.9},{...base.pose,y:0},{...original.pose,x:NaN}]) {
       assert.deepEqual(reduceLab(s,{type:'drop',pose}).boxes,s.boxes);
     }
     const floor=reduceLab(s,{type:'drop',pose:{...original.pose,y:.04,z:.2}});
@@ -547,7 +547,7 @@ try {
     assert.deepEqual(captured.boxes[0],base);
     assert.deepEqual(reduceLab(captured,{type:'drop',pose:s.boxes[1].pose}).boxes,captured.boxes);
     assert.deepEqual(reduceLab(captured,{type:'move',pose:s.boxes[1].pose}).boxes,captured.boxes);
-    for(const pose of [{...base.pose,x:base.pose.x+.2,y:MB6.h},{...base.pose,y:MB6.h,yaw:Math.PI/2},{...base.pose,y:.7}]) assert.deepEqual(reduceLab(s,{type:'drop',pose}).boxes,s.boxes);
+    assert.deepEqual(reduceLab(s,{type:'drop',pose:{...base.pose,y:.7}}).boxes,s.boxes);
   });
   test('XR wall hold requires a full hinge pull; clicks and partial pulls never complete', () => {
     const folded=-Math.PI/2;
@@ -556,6 +556,24 @@ try {
     assert.equal(wallPullComplete(wallPullAngle(folded,.5,{x:0,y:.5,z:.5}),true),true);
     assert.equal(wallPullComplete(wallPullAngle(0,.5,{x:0,y:-.5,z:-.5}),false),true);
     assert.equal(wallPullComplete(wallPullAngle(0,.5,{x:1,y:0,z:0}),false),false);
+  });
+  test('Provisional support requires more than half the footprint and allows regrabbing', () => {
+    const s=assemble(reduceLab(assemble(initialLab()),{type:'add'})), base=s.boxes[0];
+    for(const fraction of [.49,.5]) assert.deepEqual(reduceLab(s,{type:'drop',pose:{...base.pose,x:base.pose.x+MB6.w*(1-fraction),y:MB6.h+.3}}).boxes,s.boxes);
+    const rest=reduceLab(s,{type:'drop',pose:{...base.pose,x:base.pose.x+MB6.w*.49,y:MB6.h+.3}});
+    assert.equal(rest.boxes[1].restingOn,base.id); assert.equal(rest.boxes[1].support,null); assert.equal(rest.boxes[1].pose.y,MB6.h);
+    assert.ok(canGrabBox(rest,rest.boxes[1])); assert.equal(canGrabBox(rest,rest.boxes[0]),false);
+    assert.deepEqual(reduceLab({...rest,selected:base.id},{type:'lid'}).boxes,rest.boxes);
+    assert.deepEqual(reduceLab(rest,{type:'lid'}).boxes,rest.boxes);
+    const final=reduceLab(rest,{type:'drop',pose:{...base.pose,y:MB6.h}});
+    assert.equal(final.boxes[1].support,base.id); assert.equal(final.boxes[1].restingOn,null);
+    const floor=reduceLab(rest,{type:'drop',pose:s.boxes[1].pose}); assert.equal(floor.boxes[1].restingOn,null);
+  });
+  test('Rotated provisional support is not a final lock and can be removed', () => {
+    const s=assemble(reduceLab(assemble(initialLab()),{type:'add'})), base=s.boxes[0];
+    const rest=reduceLab(s,{type:'drop',pose:{...base.pose,y:MB6.h+.2,yaw:Math.PI/2}});
+    assert.equal(rest.boxes[1].restingOn,base.id); assert.equal(rest.boxes[1].support,null);
+    const floor=reduceLab(rest,{type:'unstack'});assert.equal(floor.boxes[1].pose.y,0);assert.equal(floor.boxes[1].restingOn,null);
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }
