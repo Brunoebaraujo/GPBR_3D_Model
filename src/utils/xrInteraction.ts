@@ -11,6 +11,27 @@ export function navigationInput(pads: { left: XRPad | null; right: XRPad | null 
   return { turn: axis(pads.left, 2) * time * 1.1, strafe: x / length * time * 1.2, forward: -z / length * time * 1.2 || 0 };
 }
 export const canGrabBox = (lab: Lab, box: Assembly) => ready(box) && box.support === null && !lab.boxes.some(other => (other.support === box.id || other.restingOn === box.id));
+export const canOperateLever = (lab: Lab, box: Assembly, index: number) =>
+  Number.isInteger(index) && index >= 0 && index < 4 && !box.lid && box.support === null && !box.restingOn &&
+  !lab.boxes.some(other => other.support === box.id || other.restingOn === box.id) &&
+  box.walls[index] && box.walls[(index + 1) % 4];
+export function rayEndpoint(origin: Point3, direction: Point3, distance: number): Point3 {
+  const length = Math.hypot(direction.x, direction.y, direction.z);
+  if (!Number.isFinite(distance) || distance < 0 || !Number.isFinite(length) || length < 1e-8) return { ...origin };
+  return { x: origin.x + direction.x / length * distance, y: origin.y + direction.y / length * distance, z: origin.z + direction.z / length * distance };
+}
+// Two fixed-depth rays drive a rigid, upright crate. Fit their midpoint and
+// horizontal baseline without scaling when the two controllers disagree.
+export function rayGrabbedPose(origin: Pose, start: [Point3, Point3], current: [Point3, Point3], previousYaw: number): Pose {
+  const span = (points: [Point3, Point3]) => Math.hypot(points[1].x - points[0].x, points[1].z - points[0].z);
+  const a = midpoint(...start), b = midpoint(...current);
+  const raw = span(start) > .08 && span(current) > .08
+    ? Math.atan2(current[1].x-current[0].x,current[1].z-current[0].z) - Math.atan2(start[1].x-start[0].x,start[1].z-start[0].z)
+    : previousYaw-origin.yaw;
+  const delta = previousYaw-origin.yaw + Math.atan2(Math.sin(raw-(previousYaw-origin.yaw)), Math.cos(raw-(previousYaw-origin.yaw)));
+  const dx=origin.x-a.x, dz=origin.z-a.z;
+  return { x:b.x+dx*Math.cos(delta)+dz*Math.sin(delta), y:origin.y+b.y-a.y, z:b.z-dx*Math.sin(delta)+dz*Math.cos(delta), yaw:origin.yaw+delta };
+}
 export const midpoint = (a: Point3, b: Point3): Point3 => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 });
 export function grabbedPose(origin: Pose, start: [Point3, Point3], current: [Point3, Point3], liftGain = 1): Pose {
   const initial = midpoint(...start), now = midpoint(...current);

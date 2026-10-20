@@ -389,3 +389,15 @@ Clipboard actions operate the same desktop state and loading validation. Configu
 custom equipment dimensions and product details on desktop before entering VR.
 WebXR requires a compatible browser and HTTPS (localhost is allowed). Automated
 navigation tests do not replace physical Quest validation.
+
+### MB6 controller targeting
+
+An operable bolt/lever turns blue under either controller ray; unavailable levers
+retain their normal color. Hold both triggers aimed at the same completed box to
+capture two blue surface anchors. Each ray retains its captured depth. Controller
+translation and pointing direction drive the midpoint and horizontal rotation of
+the crate, with 1:1 vertical movement, no scale and no pitch/roll. If rays diverge,
+the rigid box uses their midpoint/baseline fit rather than stretching. Existing
+collision, workspace and stacking constraints still apply. Release, tracking loss
+and module changes clear the anchors. Thumbstick offsets are disabled during this
+fixed-depth grab so they cannot change reach.

@@ -644,5 +644,45 @@ try {
     const limited=constrainExploration({x:100,y:0,z:100,yaw:0},{x:0,y:1.6,z:0},{...config,vehicle:tandem});
     assert.equal(limited.z,sceneLength(tandem)/2000+2);
   });
+  const { rayEndpoint, rayGrabbedPose, canOperateLever } = await load('utils/xrInteraction.js');
+  test('Fixed-depth XR rays preserve reach while controller direction changes', () => {
+    const hand={x:.3,y:1.2,z:2};
+    for(const direction of [{x:0,y:0,z:-1},{x:1,y:1,z:-1},{x:-3,y:2,z:1}]) {
+      const tip=rayEndpoint(hand,direction,2.4);
+      assert.ok(Math.abs(Math.hypot(tip.x-hand.x,tip.y-hand.y,tip.z-hand.z)-2.4)<1e-10);
+    }
+    assert.deepEqual(rayEndpoint(hand,{x:0,y:0,z:0},2),hand);
+  });
+  test('Ray grab translates XYZ one to one, rotates from endpoints and never scales', () => {
+    const origin={x:0,y:0,z:0,yaw:0}, start=[{x:-.4,y:.6,z:0},{x:.4,y:.6,z:0}];
+    assert.deepEqual(rayGrabbedPose(origin,start,start,0),origin);
+    const shifted=rayGrabbedPose(origin,start,start.map(p=>({x:p.x+.2,y:p.y+.7,z:p.z-.3})),0);
+    assert.ok(Math.abs(shifted.x-.2)<1e-10);assert.ok(Math.abs(shifted.y-.7)<1e-10);assert.ok(Math.abs(shifted.z+.3)<1e-10);
+    const rotated=rayGrabbedPose(origin,start,[{x:0,y:.6,z:.4},{x:0,y:.6,z:-.4}],0);
+    assert.ok(Math.abs(rotated.yaw-Math.PI/2)<1e-10);
+    assert.equal(rotated.x,0);assert.equal(rotated.z,0);
+    const separated=rayGrabbedPose(origin,start,[{x:-2,y:.6,z:0},{x:2,y:.6,z:0}],0);
+    assert.deepEqual(separated,origin);
+    const degenerate=rayGrabbedPose(origin,start,[{x:0,y:.6,z:0},{x:0,y:.6,z:0}],.7);
+    assert.ok(Math.abs(degenerate.yaw-.7)<1e-10);
+  });
+  test('Rotating controller rays moves a distant crate even with stationary hands', () => {
+    const hands=[{x:-.3,y:1,z:2},{x:.3,y:1,z:2}];
+    const start=hands.map(hand=>rayEndpoint(hand,{x:0,y:0,z:-1},2));
+    const current=hands.map(hand=>rayEndpoint(hand,{x:0,y:.5,z:-1},2));
+    const next=rayGrabbedPose({x:0,y:0,z:0,yaw:0},start,current,0);
+    assert.ok(next.y>.8);assert.ok(next.z>.2);assert.equal(next.yaw,0);
+  });
+  test('Lever hover eligibility matches operation and blocks lid, support and missing walls', () => {
+    const complete=assemble(initialLab());
+    const box=complete.boxes[0];
+    assert.equal(canOperateLever(complete,box,0),false);
+    const open=reduceLab(complete,{type:'lid'}), b=open.boxes[0];
+    assert.equal(canOperateLever(open,b,0),true);
+    assert.equal(canOperateLever(open,{...b,walls:[false,true,true,true]},0),false);
+    assert.equal(canOperateLever(open,{...b,restingOn:2},0),false);
+    assert.equal(canOperateLever({...open,boxes:[b,{...b,id:2,support:1}]},b,0),false);
+    assert.equal(canOperateLever(open,b,4),false);
+  });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }

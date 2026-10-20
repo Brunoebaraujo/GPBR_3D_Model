@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Edges, TransformControls } from '@react-three/drei';
-import { CanvasTexture, Group, Vector3, Mesh, MeshStandardMaterial } from 'three';
+import { CanvasTexture, Group, Vector3, Mesh, MeshStandardMaterial, Color } from 'three';
 import { MB6, WALL_PIVOT_Y, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
 
 type Vec = [number, number, number];
@@ -55,16 +55,26 @@ function WallNumber({ number, height }: { number: number; height: number }) {
 
 function Lever({ index, box, x, height, act, interaction, direction }: { index: number; box: Assembly; x: number; height: number; act: (a: Action) => void; interaction: Interaction; direction: number }) {
   const raised = box.leverRaised[index], bolt = box.bolts[index];
+  const root = useRef<Group>(null);
+  const originalColors = useRef(new Map<MeshStandardMaterial, Color>());
   const handle = useRef<Group>(null), carriage = useRef<Group>(null);
   const operate = (step: LeverStep) => act({ type: 'lever', index, step });
   // Click toggles the hinged handle; horizontal drag operates the sliding bolt.
   const gesture = useGesture(interaction, `Alavanca ${index + 1}: clique para ${raised ? 'rebater' : 'levantar'}; arraste na horizontal para deslizar o ferrolho.`, () => operate(raised ? 'lower' : 'lift'), (dx, dy) => operate(leverGesture(dx, dy)));
   useFrame((_, dt) => {
+    const highlighted = !!root.current?.userData.xrHovered || gesture.hovered;
+    if (highlighted) root.current?.traverse(object => {
+      if (object instanceof Mesh && object.material instanceof MeshStandardMaterial) {
+        if (!originalColors.current.has(object.material)) originalColors.current.set(object.material, object.material.color.clone());
+        object.material.color.set('#168bff');
+      }
+    });
+    else if (originalColors.current.size) { originalColors.current.forEach((color, material) => material.color.copy(color)); originalColors.current.clear(); }
     const speed = Math.min(1, dt * 12);
     if (handle.current) handle.current.rotation.x += ((raised ? -1.15 : 0) - handle.current.rotation.x) * speed;
     if (carriage.current) carriage.current.position.x += ((bolt ? direction * 0.038 : 0) - carriage.current.position.x) * speed;
   });
-  return <group position={[x, height - 0.035, 0.032]} {...gesture.events} userData={{ xrLever: { boxId: box.id, index, direction }, activate: () => operate(raised ? 'lower' : 'lift') }}>
+  return <group ref={root} position={[x, height - 0.035, 0.032]} {...gesture.events} userData={{ xrLever: { boxId: box.id, index, direction }, activate: () => operate(raised ? 'lower' : 'lift') }}>
     <Part position={[0, 0, 0]} size={[0.15, 0.05, 0.014]} />
     <Part position={[direction * 0.085, 0, 0.012]} size={[0.025, 0.045, 0.035]} color="#356b99" />
     <group ref={carriage}>

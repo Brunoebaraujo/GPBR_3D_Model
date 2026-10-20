@@ -2,15 +2,15 @@ import { explorationStart, constrainExploration, type Exploration } from '../uti
 import { controllerHand } from './controllerHand';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
+import { BoxGeometry, SphereGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
 import { supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
-import { canGrabBox, grabbedPose, leverMotion, navigationInput, navigateRig, gripHeld, heldBoxInput, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
+import { canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, navigateRig, gripHeld, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
 type Props = { exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
 type LeverTarget = { boxId: number; index: number; direction: number };
 type Target = { object: Object3D; boxId?: number; lever?: LeverTarget; activate?: () => void; panel: boolean; wall?: { boxId: number; index: number }; boxObject?: Object3D; hit: Vector3 };
 type Hand = { source: XRInputSource | null; down: boolean; target: Target | null; anchor: Vector3; phase: LeverPhase; slideDirection: number; tracked: boolean; wallStart: number; radius: number };
-type Grab = { id: number; object: Object3D; origin: Pose; start: [Point3, Point3]; candidate: Pose; extra: Pose };
+type Grab = { id: number; object: Object3D; origin: Pose; start: [Point3, Point3]; candidate: Pose; distances: [number, number]; anchors: [Vector3, Vector3] };
 
 // The viewer and controllers share a rig; the clipboard follows the left grip while held.
 export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint, children, exploration }: Props) {
@@ -44,6 +44,8 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     };
     let audio: AudioContext | null = null, menuIndex = -1, menuCooldown = 0;
     let focused: Object3D | null = null;
+    const hoveredLevers = new Set<Object3D>();
+    const clearHover = () => { hoveredLevers.forEach(object => { object.userData.xrHovered = false; }); hoveredLevers.clear(); };
     const restoreWall = (h: Hand) => { if (h.target?.wall) h.target.object.userData.xrHeld = false; };
     const actions = () => { const result: Object3D[] = []; board.current?.traverse(o => { if (typeof o.userData.activate === 'function') result.push(o); }); return result; };
     const hint = (text: string) => { if (text !== message) { message = text; latest.current.onHint(text); } };
@@ -53,8 +55,10 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     };
     const applyPose = (object: Object3D, p: Pose) => { object.position.set(p.x, p.y, p.z); object.rotation.set(0, p.yaw, 0); object.updateMatrixWorld(true); };
     const clear = (cancel: boolean) => {
+      clearHover();
       if (grab) {
         const held = grab; grab = null;
+        beams.forEach(beam => { beam.marker.visible=false; beam.beam.scale.z=1; beam.beam.position.z=-2; });
         if (!cancel) { send({ type: 'select', id: held.id }); const result = send({ type: 'drop', pose: held.candidate }); hint(result.message); }
         const box = latest.current.lab.boxes.find(b => b.id === held.id);
         applyPose(held.object, box?.pose ?? held.origin);
@@ -79,6 +83,11 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     const controllers = [0, 1].map(i => gl.xr.getController(i));
     const grips = [0, 1].map(i => gl.xr.getControllerGrip(i));
     const models = grips.map(grip => { const hand=controllerHand(); grip.add(hand.root); return hand; });
+    const rayPose = (i: number) => {
+      controllers[i].updateWorldMatrix(true, false);
+      return { origin: controllers[i].getWorldPosition(new Vector3()), direction: new Vector3(0,0,-1).applyQuaternion(controllers[i].getWorldQuaternion(new Quaternion())) };
+    };
+    const endpoint = (i: number, distance: number) => { const pose = rayPose(i); return rayEndpoint(pose.origin, pose.direction, distance); };
     const point = (i: number) => grips[i].getWorldPosition(new Vector3());
     const visible = (object: Object3D) => { for (let p: Object3D | null = object; p; p = p.parent) if (!p.visible) return false; return true; };
     const aim = (i: number): Target | null => {
@@ -112,7 +121,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       if (target.lever && !latest.current.lab.boxes.some(b => b.id === target.boxId && canGrabBox(latest.current.lab,b))) {
         if (hands.some((other, j) => j !== i && other.target?.lever?.boxId === target.lever!.boxId && other.target?.lever?.index === target.lever!.index && other.down)) { h.target = null; return; }
         const b = latest.current.lab.boxes.find(b => b.id === target.lever!.boxId)!;
-        if (b.lid || b.support !== null || latest.current.lab.boxes.some(other => (other.support === b.id || other.restingOn === b.id)) || !b.walls[target.lever.index] || !b.walls[(target.lever.index + 1) % 4]) {
+        if (!canOperateLever(latest.current.lab, b, target.lever.index)) {
           hint('Retire a tampa e monte as paredes adjacentes antes de agarrar o ferrolho.'); h.target = null; return;
         }
         send({ type: 'select', id: b.id });
@@ -125,8 +134,16 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       if (b && canGrabBox(latest.current.lab, b)) {
         const other = hands[1 - i];
         if (other.down && other.tracked && other.target?.boxId === b.id && hands[0].source?.handedness !== hands[1].source?.handedness) {
-          grab = { id: b.id, object: target.boxObject!, origin: { ...b.pose }, start: [point(0), point(1)], candidate: { ...b.pose }, extra: { x:0,y:0,z:0,yaw:0 } };
-          send({ type: 'select', id: b.id }); hint('Caixa segura: mova as mãos ou use os analógicos. O encaixe alinhado trava automaticamente.');
+          const first = aim(1-i);
+          if (first?.boxId !== b.id || !first.boxObject) { hint('Aponte os dois controles para a mesma caixa e pressione novamente o segundo gatilho.'); h.down=false; h.target=null; return; }
+          const hits: [Vector3, Vector3] = i === 0 ? [target.hit.clone(), first.hit.clone()] : [first.hit.clone(), target.hit.clone()];
+          const object = target.boxObject!;
+          object.updateWorldMatrix(true, false);
+          grab = { id:b.id, object, origin:{...b.pose}, start:hits, candidate:{...b.pose},
+            distances:[hits[0].distanceTo(rayPose(0).origin), hits[1].distanceTo(rayPose(1).origin)],
+            anchors:[object.worldToLocal(hits[0].clone()), object.worldToLocal(hits[1].clone())] };
+          clearHover();
+          send({ type: 'select', id: b.id }); hint('Pontos fixados: mova e gire os controles para posicionar a caixa. Alcance constante; encaixe automático.');
         } else hint('Mantenha este gatilho e aponte a outra mão para a mesma caixa.');
         return;
       }
@@ -151,13 +168,14 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     const beams = controllers.map((controller, i) => {
       rig.add(controller, grips[i]);
       const beam = new Mesh(new BoxGeometry(0.003, 0.003, 4), new MeshBasicMaterial({ color: '#42e8cc' })); beam.position.z = -2; beam.raycast = () => undefined; controller.add(beam);
+      const marker = new Mesh(new SphereGeometry(.018, 12, 8), new MeshBasicMaterial({color:'#168bff', depthTest:false})); marker.raycast=()=>undefined; marker.visible=false; marker.renderOrder=10; scene.add(marker);
       const connected = (event: { data: XRInputSource }) => { hands[i].source = event.data; };
       const disconnected = () => { clear(true); hands[i].source = null; hands[i].tracked = false; };
       const down = (event: { data: XRInputSource }) => begin(i, event.data);
       const up = () => { if (grab) clear(false); restoreWall(hands[i]); hands[i].down = false; hands[i].target = null; };
       controller.addEventListener('connected', connected); controller.addEventListener('disconnected', disconnected);
       controller.addEventListener('selectstart', down); controller.addEventListener('selectend', up);
-      return { beam, connected, disconnected, down, up };
+      return { beam, marker, connected, disconnected, down, up };
     });
     const visibility = () => { if (gl.xr.getSession()?.visibilityState !== 'visible') clear(true); };
     const start = () => {
@@ -190,6 +208,9 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         models[i].root.visible=h.tracked; models[i].update(h.source?.gamepad?.buttons[0]?.value ?? (h.down?1:0),h.source?.handedness==='left');
         beams[i].beam.visible = h.tracked;
         beams[i].beam.material.color.set(h.down ? '#ffcd5c' : '#42e8cc');
+        const distance = grab?.distances[i] ?? 4;
+        beams[i].beam.scale.z = distance / 4; beams[i].beam.position.z = -distance / 2;
+        beams[i].marker.visible = !!grab && h.tracked;
       });
       const pad = (side: XRHandedness) => hands.find(h => h.tracked && h.source?.handedness === side)?.source?.gamepad ?? null;
       const pads = { left: pad('left'), right: pad('right') };
@@ -230,29 +251,39 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         const bounded = constrainExploration({ x:rig.position.x, y:rig.position.y, z:rig.position.z, yaw:rig.rotation.y }, viewer.transform.position, latest.current.exploration);
         rig.position.set(bounded.x, bounded.y, bounded.z); rig.updateMatrixWorld(true);
       }
+      clearHover();
+      if (!grab && !menu) hands.forEach((hand, i) => {
+        if (!hand.tracked) return;
+        const target = hand.down ? hand.target : aim(i);
+        if (!target?.lever || target.panel) return;
+        const box = latest.current.lab.boxes.find(b => b.id === target.lever!.boxId);
+        const occupied = hands.some((other,j) => j !== i && other.down && other.target?.lever?.boxId === target.lever!.boxId && other.target?.lever?.index === target.lever!.index);
+        if (box && canOperateLever(latest.current.lab, box, target.lever.index) && !occupied) {
+          hoveredLevers.add(target.object); target.object.userData.xrHovered=true;
+          beams[i].beam.material.color.set('#168bff');
+        }
+      });
       if (grab) {
         const held = grab, b = latest.current.lab.boxes.find(b => b.id === held.id);
         if (!b || !canGrabBox(latest.current.lab, b)) { clear(true); return; }
         const previousCandidate = held.candidate;
-        const input = heldBoxInput(pads,b.restingOn ? dt*.2 : dt), heading=rig.rotation.y+headYaw;
-        held.extra.x += input.strafe*Math.cos(heading)-input.forward*Math.sin(heading);
-        held.extra.z -= input.strafe*Math.sin(heading)+input.forward*Math.cos(heading);
-        held.extra.y += input.lift; held.extra.yaw -= input.turn;
-        const physical = grabbedPose(held.origin,held.start,[point(0),point(1)],2);
-        held.candidate = { x:physical.x+held.extra.x,y:Math.max(0,Math.min(2.5,physical.y+held.extra.y)),z:physical.z+held.extra.z,yaw:physical.yaw+held.extra.yaw };
+        const physical = rayGrabbedPose(held.origin, held.start, [endpoint(0,held.distances[0]), endpoint(1,held.distances[1])], held.candidate.yaw);
+        held.candidate = { ...physical, y:Math.max(0,Math.min(2.5,physical.y)) };
         held.candidate = supportedPose(b,held.candidate,latest.current.lab.boxes);
         const snapped = latest.current.lab.boxes.map(other=>captureStackPose({...b,pose:held.candidate},other)).find(Boolean);
         if (snapped) { held.candidate=snapped; clear(false); return; }
         const state = reduceLab(latest.current.lab, { type: 'select', id: held.id });
         const preview = reduceLab(state, { type: 'move', pose: held.candidate });
         const accepted = preview.boxes.find(box => box.id === held.id)!;
-        if (accepted !== b) { held.candidate = accepted.pose; applyPose(held.object, accepted.pose); hint('Caixa segura: analógico direito sobe/desce; esquerdo aproxima e gira. Alinhe para encaixar automaticamente.'); }
+        if (accepted !== b) { held.candidate = accepted.pose; applyPose(held.object, accepted.pose); hint('Pontos fixados em azul: mova e gire os controles. Solte para apoiar; alinhe para encaixar.'); }
         else {
           // Release must use the last displayed, valid pose. A rejected controller
           // sample must not silently replace it and send the box back to its origin.
           held.candidate = previousCandidate;
           hint('Movimento bloqueado: eleve a caixa antes de aproximá-la da outra.');
         }
+        held.object.updateWorldMatrix(true, false);
+        beams.forEach((beam,i) => beam.marker.position.copy(held.object.localToWorld(held.anchors[i].clone())));
       } else hands.forEach((h, i) => {
         const target = h.target;
         if (!h.down || !h.tracked || !target) return;
@@ -286,6 +317,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         const b = beams[i]; controller.removeEventListener('connected', b.connected); controller.removeEventListener('disconnected', b.disconnected);
         controller.removeEventListener('selectstart', b.down); controller.removeEventListener('selectend', b.up);
         grips[i].remove(models[i].root); models[i].dispose();
+        scene.remove(b.marker); b.marker.geometry.dispose(); b.marker.material.dispose();
         controller.remove(b.beam); rig.remove(controller, grips[i]); b.beam.geometry.dispose(); b.beam.material.dispose();
       });
       scene.remove(rig); onRenderer(null);
