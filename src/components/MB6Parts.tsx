@@ -111,7 +111,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
         {[-1, 0, 1].map(x => <Part key={x} position={[x * (width / 2 - 0.025), height / 2, 0.008]} size={[0.025, height, 0.012]} highlight={gesture.hovered} />)}
         {[0, 0.5, 1].map(y => <Part key={y} position={[0, y * (height - 0.02), 0.008]} size={[width, 0.02, 0.012]} highlight={gesture.hovered} />)}
       </group>
-      {(raised && index === 0 ? [3, 0] : raised && index === 2 ? [1, 2] : []).map((corner, side) => <Lever key={corner} index={corner} box={box} x={(side ? 1 : -1) * (width / 2 - 0.11)} height={height} act={act} interaction={interaction} direction={side ? 1 : -1} />)}
+      {(index === 0 ? [3, 0] : index === 2 ? [1, 2] : []).map((corner, side) => <Lever key={corner} index={corner} box={box} x={(side ? 1 : -1) * (width / 2 - 0.11)} height={height} act={act} interaction={interaction} direction={side ? 1 : -1} />)}
     </group>
   </group>;
 }

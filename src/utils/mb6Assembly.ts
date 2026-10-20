@@ -67,6 +67,14 @@ export function overlapFraction(top: Pose, base: Pose): number {
 export function restingBase(top: Assembly, boxes: Assembly[]): Assembly | undefined {
   return boxes.find(base=>base.id!==top.id && ready(top) && ready(base) && base.support===null && !base.restingOn && base.pose.y===0 && top.pose.y>=MB6.h-.04 && top.pose.y<=2.5 && overlapFraction(top.pose,base.pose)>.5+1e-8);
 }
+// A provisional support behaves as a contact plane while sliding; hand jitter
+// must not push the crate through the supporting lid.
+export function supportedPose(box: Assembly, pose: Pose, boxes: Assembly[]): Pose {
+  const base=boxes.find(b=>b.id===box.restingOn);
+  if (!base || !Object.values(pose).every(Number.isFinite)) return pose;
+  if(overlapFraction(pose,base.pose)>.5+1e-8 && pose.y<MB6.h+.06) return {...pose,y:MB6.h};
+  return pose;
+}
 export function reduceLab(state: Lab, action: Action): Lab {
   if (action.type === 'reset') return initialLab();
   if (action.type === 'select') return state.boxes.some(b => b.id === action.id) ? { ...state, selected: action.id } : state;
@@ -124,7 +132,7 @@ export function reduceLab(state: Lab, action: Action): Lab {
   }
   if (action.type === 'drop') {
     if (!ready(b)) return fail('Monte, trave e tampe a caixa antes de segurá-la com as duas mãos.');
-    const p = action.pose;
+    const p = supportedPose(b, action.pose, state.boxes);
     if (!Object.values(p).every(Number.isFinite)) return fail('Posição inválida. A caixa voltou ao ponto de partida.');
     const snapped = state.boxes.map(other => captureStackPose({ ...b, pose: p }, other)).find(Boolean);
     if (snapped) return reduceLab({ ...state, boxes: state.boxes.map(box => box.id === b.id ? { ...box, pose: snapped } : box) }, { type: 'stack' });
@@ -134,7 +142,7 @@ export function reduceLab(state: Lab, action: Action): Lab {
     return fail('Sem apoio válido: alinhe os quatro pés à outra caixa ou solte perto do piso. Caixa devolvida à origem.');
   }
   if (action.type === 'move') {
-    const p = action.pose;
+    const p = supportedPose(b, action.pose, state.boxes);
     if (!Object.values(p).every(Number.isFinite) || Math.abs(p.x) > 3 || Math.abs(p.z) > 3 || p.y < 0 || p.y > 2.5) return fail('Mantenha a caixa dentro da área de trabalho.');
     if (state.boxes.some(other => captureStackPose({ ...b, pose: p }, other))) return reduceLab(state, { type: 'drop', pose: p });
     // Conservative swept-free endpoint envelope. Raised placement is a preview, never a supported stack.
@@ -147,7 +155,7 @@ export function reduceLab(state: Lab, action: Action): Lab {
       return Math.abs(p.x - other.pose.x) < ex + ox - 0.001 && Math.abs(p.z - other.pose.z) < ez + oz - 0.001 && p.y < other.pose.y + boxHeight(other) - 0.001 && p.y + boxHeight(b) > other.pose.y + 0.001;
     });
     if (collision) return fail('Movimento recusado: caixas se sobrepõem. Eleve antes de aproximar.');
-    return update({ ...b, restingOn: null, pose: { ...p } }, p.y > 0 ? 'Posição de teste suspensa. Alinhe e confirme o encaixe.' : 'Caixa posicionada no piso.');
+    return update({ ...b, restingOn: p.y === MB6.h ? restingBase({...b,pose:p},state.boxes)?.id ?? null : null, pose: { ...p } }, p.y > 0 ? 'Posição de teste suspensa. Alinhe e confirme o encaixe.' : 'Caixa posicionada no piso.');
   }
   return state;
 }

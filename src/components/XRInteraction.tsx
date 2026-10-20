@@ -2,7 +2,7 @@ import { controllerHand } from './controllerHand';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
-import { captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
+import { supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
 import { canGrabBox, grabbedPose, leverMotion, navigationInput, navigateRig, gripHeld, heldBoxInput, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
 type Props = { lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
@@ -98,7 +98,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const target = aim(i); h.target = target;
       if (!target) return;
       if (target.panel) { if (source.handedness === 'right' && !hands.some((other, j) => j !== i && other.down)) target.activate?.(); return; }
-      if (target.lever) {
+      if (target.lever && !latest.current.lab.boxes.some(b => b.id === target.boxId && canGrabBox(latest.current.lab,b))) {
         if (hands.some((other, j) => j !== i && other.target?.lever?.boxId === target.lever!.boxId && other.target?.lever?.index === target.lever!.index && other.down)) { h.target = null; return; }
         const b = latest.current.lab.boxes.find(b => b.id === target.lever!.boxId)!;
         if (b.lid || b.support !== null || latest.current.lab.boxes.some(other => (other.support === b.id || other.restingOn === b.id)) || !b.walls[target.lever.index] || !b.walls[(target.lever.index + 1) % 4]) {
@@ -113,7 +113,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const b = latest.current.lab.boxes.find(b => b.id === target.boxId);
       if (b && canGrabBox(latest.current.lab, b)) {
         const other = hands[1 - i];
-        if (other.down && other.tracked && other.target?.boxId === b.id && !other.target.lever && hands[0].source?.handedness !== hands[1].source?.handedness) {
+        if (other.down && other.tracked && other.target?.boxId === b.id && hands[0].source?.handedness !== hands[1].source?.handedness) {
           grab = { id: b.id, object: target.boxObject!, origin: { ...b.pose }, start: [point(0), point(1)], candidate: { ...b.pose }, extra: { x:0,y:0,z:0,yaw:0 } };
           send({ type: 'select', id: b.id }); hint('Caixa segura: mova as mãos ou use os analógicos. O encaixe alinhado trava automaticamente.');
         } else hint('Mantenha este gatilho e aponte a outra mão para a mesma caixa.');
@@ -210,18 +210,19 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       if (grab) {
         const held = grab, b = latest.current.lab.boxes.find(b => b.id === held.id);
         if (!b || !canGrabBox(latest.current.lab, b)) { clear(true); return; }
-        const input = heldBoxInput(pads,dt), heading=rig.rotation.y+headYaw;
+        const input = heldBoxInput(pads,b.restingOn ? dt*.2 : dt), heading=rig.rotation.y+headYaw;
         held.extra.x += input.strafe*Math.cos(heading)-input.forward*Math.sin(heading);
         held.extra.z -= input.strafe*Math.sin(heading)+input.forward*Math.cos(heading);
         held.extra.y += input.lift; held.extra.yaw -= input.turn;
         const physical = grabbedPose(held.origin,held.start,[point(0),point(1)],2);
         held.candidate = { x:physical.x+held.extra.x,y:Math.max(0,Math.min(2.5,physical.y+held.extra.y)),z:physical.z+held.extra.z,yaw:physical.yaw+held.extra.yaw };
+        held.candidate = supportedPose(b,held.candidate,latest.current.lab.boxes);
         const snapped = latest.current.lab.boxes.map(other=>captureStackPose({...b,pose:held.candidate},other)).find(Boolean);
         if (snapped) { held.candidate=snapped; clear(false); return; }
         const state = reduceLab(latest.current.lab, { type: 'select', id: held.id });
         const preview = reduceLab(state, { type: 'move', pose: held.candidate });
         const accepted = preview.boxes.find(box => box.id === held.id)!;
-        if (accepted !== b) { applyPose(held.object, held.candidate); hint('Caixa segura: analógico direito sobe/desce; esquerdo aproxima e gira. Alinhe para encaixar automaticamente.'); }
+        if (accepted !== b) { held.candidate = accepted.pose; applyPose(held.object, accepted.pose); hint('Caixa segura: analógico direito sobe/desce; esquerdo aproxima e gira. Alinhe para encaixar automaticamente.'); }
         else hint('Movimento bloqueado: eleve a caixa antes de aproximá-la da outra.');
       } else hands.forEach((h, i) => {
         const target = h.target;
@@ -236,7 +237,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           }
           return;
         }
-        if (!target.lever || h.phase === 'done') return;
+        if (!target.lever || h.phase === 'done' || latest.current.lab.boxes.some(b=>b.id===target.boxId && canGrabBox(latest.current.lab,b))) return;
         const local = target.object.worldToLocal(point(i));
         const step = leverMotion(h.phase, local.clone().sub(h.anchor), h.slideDirection);
         if (!step) return;

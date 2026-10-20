@@ -576,6 +576,21 @@ try {
     assert.equal(final.boxes[1].support,base.id); assert.equal(final.boxes[1].restingOn,null);
     const floor=reduceLab(rest,{type:'drop',pose:s.boxes[1].pose}); assert.equal(floor.boxes[1].restingOn,null);
   });
+  test('Supported crate slides in small steps despite downward hand drift and retains support until snap', () => {
+    let s=assemble(reduceLab(assemble(initialLab()),{type:'add'}));const base=s.boxes[0];
+    s=reduceLab(s,{type:'drop',pose:{...base.pose,x:base.pose.x+.35,y:MB6.h+.2}});
+    for(let i=0;i<12;i++) {
+      const previous=s.boxes[1].pose;
+      s=reduceLab(s,{type:'move',pose:{...previous,x:previous.x-.02,y:previous.y-.03}});
+      assert.ok(Math.abs(s.boxes[1].pose.x-(previous.x-.02))<1e-8);
+      assert.equal(s.boxes[1].pose.y,MB6.h);assert.equal(s.boxes[1].restingOn,base.id);
+      assert.equal(canGrabBox(s,s.boxes[1]),true);assert.equal(canGrabBox(s,s.boxes[0]),false);
+    }
+    s=reduceLab(s,{type:'drop',pose:{...s.boxes[1].pose,y:MB6.h-.02}});
+    assert.equal(s.boxes[1].restingOn,base.id);
+    s=reduceLab(s,{type:'move',pose:{...base.pose,y:MB6.h-.03}});
+    assert.equal(s.boxes[1].support,base.id);
+  });
   test('Rotated provisional support is not a final lock and can be removed', () => {
     const s=assemble(reduceLab(assemble(initialLab()),{type:'add'})), base=s.boxes[0];
     const rest=reduceLab(s,{type:'drop',pose:{...base.pose,y:MB6.h+.2,yaw:Math.PI/2}});
