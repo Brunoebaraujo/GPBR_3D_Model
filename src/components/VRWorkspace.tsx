@@ -6,6 +6,7 @@ import { OrbitControls } from '@react-three/drei';
 import { CanvasTexture, WebGLRenderer } from 'three';
 import { MB6, WALL_NAMES, ASSEMBLY_ORDER, initialLab, reduceLab, ready, type Pose, type LeverStep } from '../utils/mb6Assembly';
 import { Crate, type MouseTool } from './MB6Parts';
+import { AssemblyChallenge } from './AssemblyChallenge';
 import { XRInteraction } from './XRInteraction';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import './vr.css';
@@ -46,7 +47,7 @@ function CameraView({ request, presenting }: { request: ViewRequest | null; pres
   }, [camera, controls, request, presenting]);
   return null;
 }
-function Label({ text, position, action, width = 1.1, height = 0.045, color = '#183747' }: { text: string; position: Vec; action?: () => void; width?: number; height?: number; color?: string }) {
+export function Label({ text, position, action, width = 1.1, height = 0.045, color = '#183747' }: { text: string; position: Vec; action?: () => void; width?: number; height?: number; color?: string }) {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 128;
     const ctx = canvas.getContext('2d')!; ctx.fillStyle = color; ctx.fillRect(0, 0, 1024, 128);
@@ -134,7 +135,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
     { label: 'Desempilhar', run: () => dispatch({ type: 'unstack' }) },
     { label: 'Girar 90°', run: () => dispatch({ type: 'move', pose: { ...selected.pose, yaw: selected.pose.yaw + Math.PI / 2 } }) },
   ];
-  const vrActions = activeModule === 'vr' ? actions : [
+  const vrActions = activeModule === 'vr' ? [] : [
     ...(activeModule === 'road' ? [
       { label: flight ? 'Modo caminhada' : 'Modo voo', run: () => { setFlight(!flight); visit('entry'); } },
       { label: 'Entrar no equipamento', run: () => { setFlight(false); visit('inside'); } },
@@ -154,13 +155,13 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
       <div className="vr-row">{lab.boxes.map(b => <button key={b.id} aria-pressed={selected.id === b.id} onClick={() => dispatch({ type: 'select', id: b.id })}>Caixa {b.id}</button>)}</div>
       {module === 'desktop' && <div className="vr-tools" aria-label="Vistas da caixa">{([['front', 'Ver frente'], ['back', 'Ver fundo'], ['overview', 'Visão geral']] as const).map(([kind, label]) => <button key={kind} onClick={() => setView({ kind, pose: { ...selected.pose } })}>{label}</button>)}</div>}
       <p>{selected.walls.filter(Boolean).length}/4 paredes · {selected.locks.filter(Boolean).length}/4 travas · {selected.support ? 'Empilhada' : ready(selected) ? 'Pronta' : 'Em montagem'}<br />Rotação: {Math.round(selected.pose.yaw * 180 / Math.PI)}°</p>
-      <div className="vr-corners" aria-label="Vértices">{selected.locks.map((locked, i) => <button key={i} aria-pressed={corner === i} onClick={() => chooseCorner(i)}>V{i + 1} · {locked ? 'travado' : selected.leverRaised[i] ? 'alça aberta' : 'livre'}</button>)}</div>
+      {module === 'desktop' && <div className="vr-corners" aria-label="Vértices">{selected.locks.map((locked, i) => <button key={i} aria-pressed={corner === i} onClick={() => chooseCorner(i)}>V{i + 1} · {locked ? 'travado' : selected.leverRaised[i] ? 'alça aberta' : 'livre'}</button>)}</div>}
       <p className="vr-lever-guide">Alavanca {corner + 1}: <strong>1. Levantar → 2. Deslizar → 3. Rebater</strong><br />Para destravar, repita as três etapas recolhendo o ferrolho.</p>
       <p>Montagem: Frente → Fundo → Esquerda → Direita.<br />Desmontagem na ordem inversa. Recolhida, de baixo para cima: Direita → Esquerda → Fundo → Frente → Tampa.</p>
-      <details open><summary>Comandos de apoio</summary><div className="vr-actions">{actions.map(a => <button key={a.label} onClick={a.run}>{a.label}</button>)}</div></details>
+      {module === 'desktop' && <><details open><summary>Comandos de apoio</summary><div className="vr-actions">{actions.map(a => <button key={a.label} onClick={a.run}>{a.label}</button>)}</div></details>
       <h2>Alinhamento dos pés</h2><small>Eleve, aproxime, ajuste X em −20 mm três vezes e teste. Gire para experimentar um encaixe incompatível.</small>
       {(['x', 'y', 'z'] as const).map(axis => <div className="vr-row" key={axis}><span>{axis.toUpperCase()} {Math.round(selected.pose[axis] * 1000)} mm</span>{[-0.02, 0.02].map(d => <button key={d} aria-label={`${axis.toUpperCase()} ${d > 0 ? '+' : '−'}20 mm`} onClick={() => move(axis, d)}>{d > 0 ? '+' : '−'}20</button>)}</div>)}
-      <button onClick={() => dispatch({ type: 'reset' })}>Reiniciar laboratório</button>
+      </>}<button onClick={() => dispatch({ type: 'reset' })}>Reiniciar laboratório</button>
       <p className="vr-note">Ficha: recolhida 224 mm; tampa 10,6 kg. A folga visual da parede 1 usa curso ilustrativo de 50 mm; o envelope recolhido exibido é maior que a cota nominal. Alavancas reproduzem a sequência visual do vídeo. Cotas dos fechos e encaixes não constam na ficha e continuam aproximadas.</p>
     </aside>
     <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status"><span className="vr-mode-label">{module === 'desktop' ? 'DESKTOP · MOUSE' : 'VR · HEADSET'}</span>{lab.message}</div><div className="vr-mouse-hint">{hint}</div>
@@ -169,6 +170,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
 
         <CameraView request={view} presenting={presenting} />
         {!assembly && data?.scene}
+        <group visible={assembly}><AssemblyChallenge lab={lab} dispatch={dispatch} /></group>
         {assembly && lab.boxes.map(b => <Crate key={b.id} box={b} selected={b.id === selected.id} tool={module === 'desktop' ? tool : 'assemble'} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onPose={onPose} interaction={{ enabled: module === 'desktop' && tool === 'assemble', busy: setDragging, hint: setHint }} />)}
         <XRInteraction exploration={{ key: `${activeModule}:${data?.vehicle?.kind ?? ''}`, mode: flight ? 'fly' : 'walk', vehicle: activeModule === 'road' ? data?.vehicle : undefined, view: viewpoint.view, revision: viewpoint.revision }} lab={lab} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onRenderer={setRenderer} onPresenting={setPresenting} onHint={setHint}>
           <mesh position={[0, 0, -0.012]}><boxGeometry args={[0.46, 0.80, 0.018]} /><meshStandardMaterial color="#203541" roughness={0.8} /></mesh>
@@ -176,9 +178,9 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
           <Label text={activeModule === 'vr' ? `MB6 · Caixa ${selected.id} · ${selected.walls.filter(Boolean).length}/4 paredes · ${selected.locks.filter(Boolean).length}/4 travas` : activeModule === 'road' ? `ESTUFAGEM · ${flight ? 'VOO' : 'CAMINHADA'}` : 'PRODUTO NO GOODPACK'} position={[0, 0.27, 0.002]} width={0.42} />
           <Label text={activeModule === 'vr' ? ['MONTAGEM', 'TRAVAS E CAIXAS', 'POSIÇÃO E ENCAIXE'][safePage] : 'COMANDOS'} position={[0, 0.215, 0.002]} width={0.42} />
           {vrActions.slice(safePage * 6, safePage * 6 + 6).map((action, i) => <Label key={action.label} text={action.label} position={[-0.108 + (i % 2) * 0.216, 0.15 - Math.floor(i / 2) * 0.06, 0.002]} action={action.run} width={0.2} />)}
-          <Label text="‹ Página" position={[-0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + vrPages - 1) % vrPages)} />
+          {activeModule !== 'vr' && <><Label text="‹ Página" position={[-0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + vrPages - 1) % vrPages)} />
           <Label text={`Página ${safePage + 1}/${vrPages} ›`} position={[0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + 1) % vrPages)} />
-          {activeModule === 'vr' && lab.boxes.map((box, i) => <Label key={box.id} text={`Selecionar caixa ${box.id}`} position={[-0.108 + i * 0.216, -0.095, 0.002]} width={0.2} action={() => dispatch({ type: 'select', id: box.id })} />)}
+          </>}
           <Label text={activeModule === 'road' ? (flight ? 'Direito: deslocar. Esquerdo: subir/descer e virar. Grip esquerdo: prancheta.' : 'Direito: caminhar. Esquerdo: virar. Área externa: 2 m. Grip esquerdo: prancheta.') : hint} position={[0, -0.16, 0.002]} width={0.42} height={0.06} />
           <Label text={activeModule === 'vr' ? lab.message : data?.status ?? 'Carregando cenário'} position={[0, -0.22, 0.002]} width={0.42} />
           {activeModule === 'vr' && <Label text="Reiniciar" position={[-0.108, -0.28, 0.002]} width={0.2} action={() => dispatch({ type: 'reset' })} />}<Label text="Sair do VR" position={[0.108, -0.28, 0.002]} width={0.2} action={() => void renderer?.xr.getSession()?.end()} />

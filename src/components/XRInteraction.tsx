@@ -1,9 +1,9 @@
-import { explorationStart, constrainExploration, type Exploration } from '../utils/xrNavigation';
+import { constrainCrates, explorationStart, constrainExploration, type Exploration } from '../utils/xrNavigation';
 import { controllerHand } from './controllerHand';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { BoxGeometry, SphereGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
-import { supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
+import { MB6, WALL_PIVOT_Y, supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
 import { canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, navigateRig, gripHeld, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
 type Props = { exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
@@ -44,6 +44,8 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     };
     let audio: AudioContext | null = null, menuIndex = -1, menuCooldown = 0;
     let focused: Object3D | null = null;
+    const projectedHands = [controllerHand(), controllerHand()];
+    projectedHands.forEach(hand => { hand.root.visible=false; scene.add(hand.root); });
     const hoveredLevers = new Set<Object3D>();
     const clearHover = () => { hoveredLevers.forEach(object => { object.userData.xrHovered = false; }); hoveredLevers.clear(); };
     const restoreWall = (h: Hand) => { if (h.target?.wall) h.target.object.userData.xrHeld = false; };
@@ -187,6 +189,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       hint('Esquerda: virar e avançar/recuar. Segure o grip esquerdo para abrir a prancheta.');
     };
     const end = () => {
+      projectedHands.forEach(hand=>{hand.root.visible=false;});
       clear(true); if (board.current) board.current.visible = false;
       gl.xr.getSession()?.removeEventListener('visibilitychange', visibility);
       if (active) { rig.remove(camera); originalParent?.add(camera); camera.position.copy(saved.position); camera.quaternion.copy(saved.quaternion);
@@ -251,6 +254,21 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         const bounded = constrainExploration({ x:rig.position.x, y:rig.position.y, z:rig.position.z, yaw:rig.rotation.y }, viewer.transform.position, latest.current.exploration);
         rig.position.set(bounded.x, bounded.y, bounded.z); rig.updateMatrixWorld(true);
       }
+      if (latest.current.exploration?.key.startsWith('vr:')) {
+        const bounded=constrainCrates({x:rig.position.x,y:rig.position.y,z:rig.position.z,yaw:rig.rotation.y},viewer.transform.position,latest.current.lab.boxes);
+        rig.position.set(bounded.x,bounded.y,bounded.z);rig.updateMatrixWorld(true);
+      }
+      projectedHands.forEach((hand,i)=>{
+        const target=hands[i].target;
+        const holding=hands[i].tracked && hands[i].down && !!target?.wall && !!target.object.userData.xrHeld;
+        hand.root.visible=holding;
+        if(holding && target?.wall){
+          models[i].root.visible=false;
+          hand.root.position.copy(target.object.localToWorld(new Vector3(0,MB6.h-.035-WALL_PIVOT_Y[target.wall.index],.025)));
+          hand.root.quaternion.copy(target.object.getWorldQuaternion(new Quaternion()));
+          hand.update(1,hands[i].source?.handedness==='left');
+        }
+      });
       clearHover();
       if (!grab && !menu) hands.forEach((hand, i) => {
         if (!hand.tracked) return;
@@ -320,6 +338,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         scene.remove(b.marker); b.marker.geometry.dispose(); b.marker.material.dispose();
         controller.remove(b.beam); rig.remove(controller, grips[i]); b.beam.geometry.dispose(); b.beam.material.dispose();
       });
+      projectedHands.forEach(hand=>{scene.remove(hand.root);hand.dispose();});
       scene.remove(rig); onRenderer(null);
     };
   }, [gl, scene, camera, onRenderer, onPresenting]);

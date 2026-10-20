@@ -372,6 +372,7 @@ try {
   });
   test('MB6 assembles four independent walls and locks; adjacent locks prevent folding', () => {
     let s = assemble(initialLab()); assert.equal(ready(s.boxes[0]), true);
+    s = reduceLab(s, {type:'select',id:1});
     s = reduceLab(s, { type: 'lid' });
     assert.equal(reduceLab(s, { type: 'wall', index: 0 }).boxes[0].walls[0], true);
     s = operateLever(s, 0);
@@ -395,6 +396,22 @@ try {
     for (let i = 1; i < FOLD_ORDER.length; i++) assert.ok(WALL_PIVOT_Y[FOLD_ORDER[i]] - WALL_PIVOT_Y[FOLD_ORDER[i-1]] > 0.02);
     assert.ok(WALL_PIVOT_Y[0] + 0.06 <= MB6.collapsed - 0.012);
   });
+  test('Completing box one automatically creates box two with a one metre gap', () => {
+    const s=assemble(initialLab());
+    assert.equal(s.boxes.length,2);assert.equal(s.selected,2);
+    assert.equal(ready(s.boxes[0]),true);assert.equal(ready(s.boxes[1]),false);
+    assert.ok(Math.abs(s.boxes[1].pose.x-s.boxes[0].pose.x-MB6.w-1)<1e-9);
+  });
+  const {constrainCrates}=await load('utils/xrNavigation.js');
+  test('Player collision prevents crossing folded, raised and rotated crates',()=>{
+    for(const yaw of [0,Math.PI/4,Math.PI/2]) {
+      const box={...initialLab().boxes[0],pose:{x:0,y:0,z:0,yaw}};
+      const p=constrainCrates({x:0,y:0,z:0,yaw:0},{x:0,y:1.7,z:0},[box]);
+      const lx=p.x*Math.cos(yaw)-p.z*Math.sin(yaw),lz=p.x*Math.sin(yaw)+p.z*Math.cos(yaw);
+      assert.ok(Math.abs(lx)>=MB6.w/2+.219 || Math.abs(lz)>=MB6.d/2+.219);
+      const outside={x:3,y:0,z:3,yaw:0};assert.deepEqual(constrainCrates(outside,{x:0,y:1.7,z:0},[box]),outside);
+    }
+  });
   test('MB6 second box is independent and creation is bounded', () => {
     let s = assemble(initialLab()); s = reduceLab(s, { type: 'add' });
     assert.equal(ready(s.boxes[0]), true); assert.equal(ready(s.boxes[1]), false);
@@ -413,7 +430,7 @@ try {
   test('MB6 endpoint collision rejects overlap; supported base cannot move or open until unstacked', () => {
     let s = assemble(reduceLab(assemble(initialLab()), { type: 'add' }));
     const pose = { ...s.boxes[0].pose };
-    assert.equal(reduceLab(s, { type: 'move', pose }).boxes[1].pose.x, 0.8);
+    assert.equal(reduceLab(s, { type: 'move', pose }).boxes[1].pose.x, -0.8 + MB6.w + 1);
     s = reduceLab(s, { type: 'move', pose: { ...s.boxes[1].pose, y: MB6.h } });
     s = reduceLab(s, { type: 'move', pose: { ...pose, y: MB6.h } });
     s = reduceLab(s, { type: 'stack' }); assert.equal(s.boxes[1].support, 1);
@@ -677,7 +694,7 @@ try {
     const complete=assemble(initialLab());
     const box=complete.boxes[0];
     assert.equal(canOperateLever(complete,box,0),false);
-    const open=reduceLab(complete,{type:'lid'}), b=open.boxes[0];
+    const open=reduceLab({...complete,selected:1},{type:'lid'}), b=open.boxes[0];
     assert.equal(canOperateLever(open,b,0),true);
     assert.equal(canOperateLever(open,{...b,walls:[false,true,true,true]},0),false);
     assert.equal(canOperateLever(open,{...b,restingOn:2},0),false);

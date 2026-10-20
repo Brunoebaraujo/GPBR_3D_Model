@@ -1,3 +1,4 @@
+import { MB6, type Assembly } from './mb6Assembly';
 import type { Pose } from './mb6Assembly';
 import type { Point3 } from './xrInteraction';
 import { cargoBodies, sceneLength, type RoadVehicle } from './roadLoading';
@@ -23,4 +24,21 @@ export function constrainExploration(pose: Pose, viewer: Point3, config: Explora
   return { ...pose, x: clamp(pose.x + xOffset, halfWidth) - xOffset,
     z: clamp(pose.z + zOffset, halfLength) - zOffset,
     y: config.mode === 'walk' ? 0 : Math.max(0, Math.min(10, pose.y)) };
+}
+
+export function constrainCrates(pose: Pose, viewer: Point3, boxes: Assembly[]): Pose {
+  const offsetX=viewer.x*Math.cos(pose.yaw)+viewer.z*Math.sin(pose.yaw);
+  const offsetZ=-viewer.x*Math.sin(pose.yaw)+viewer.z*Math.cos(pose.yaw);
+  let x=pose.x+offsetX,z=pose.z+offsetZ;
+  for (const box of boxes) {
+    if (box.pose.y>1.8) continue;
+    const c=Math.cos(box.pose.yaw),s=Math.sin(box.pose.yaw);
+    let lx=(x-box.pose.x)*c-(z-box.pose.z)*s,lz=(x-box.pose.x)*s+(z-box.pose.z)*c;
+    const wx=MB6.w/2+.22,wz=MB6.d/2+.22;
+    if(Math.abs(lx)>=wx || Math.abs(lz)>=wz) continue;
+    if(wx-Math.abs(lx)<wz-Math.abs(lz)) lx=(lx<0?-1:1)*wx;
+    else lz=(lz<0?-1:1)*wz;
+    x=box.pose.x+lx*c+lz*s;z=box.pose.z-lx*s+lz*c;
+  }
+  return {...pose,x:x-offsetX,z:z-offsetZ};
 }
