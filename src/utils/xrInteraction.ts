@@ -52,6 +52,9 @@ export function heldBoxInput(pads: { left: XRPad | null; right: XRPad | null }, 
 // The hand pulls the grabbed point around the hinge, with a minimum lever arm.
 export function wallPullAngle(start: number, radius: number, delta: Point3): number {
   const r = Math.max(.25, radius);
-  return Math.max(-Math.PI / 2, Math.min(0, Math.atan2(r * Math.sin(start) + delta.z, r * Math.cos(start) + delta.y)));
+  const arc = Math.atan2(r * Math.sin(start) + delta.z, r * Math.cos(start) + delta.y);
+  // Permit a natural upward pull without requiring a full arm-length horizontal sweep.
+  const lift = start + Math.max(0, delta.y) / Math.min(r, .45) * Math.PI / 2;
+  return Math.max(-Math.PI / 2, Math.min(0, start < -.12 ? Math.max(arc,lift) : arc));
 }
 export const wallPullComplete = (angle: number, raising: boolean) => raising ? angle >= -.12 : angle <= -Math.PI / 2 + .12;

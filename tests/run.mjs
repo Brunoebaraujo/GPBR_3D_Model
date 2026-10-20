@@ -557,6 +557,13 @@ try {
     assert.equal(wallPullComplete(wallPullAngle(0,.5,{x:0,y:-.5,z:-.5}),false),true);
     assert.equal(wallPullComplete(wallPullAngle(0,.5,{x:1,y:0,z:0}),false),false);
   });
+  test('XR upward pull raises every folded wall without a horizontal sweep', () => {
+    for(const radius of [.25,.5,.95]) {
+      assert.equal(wallPullComplete(wallPullAngle(-Math.PI/2,radius,{x:0,y:0,z:0}),true),false);
+      assert.equal(wallPullComplete(wallPullAngle(-Math.PI/2,radius,{x:0,y:.08,z:0}),true),false);
+      assert.equal(wallPullComplete(wallPullAngle(-Math.PI/2,radius,{x:0,y:.46,z:0}),true),true);
+    }
+  });
   test('Provisional support requires more than half the footprint and allows regrabbing', () => {
     const s=assemble(reduceLab(assemble(initialLab()),{type:'add'})), base=s.boxes[0];
     for(const fraction of [.49,.5]) assert.deepEqual(reduceLab(s,{type:'drop',pose:{...base.pose,x:base.pose.x+MB6.w*(1-fraction),y:MB6.h+.3}}).boxes,s.boxes);
