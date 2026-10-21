@@ -72,7 +72,7 @@ export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>v
     try{sessionStorage.setItem(cacheKey,JSON.stringify(next));}catch{/* In-memory scores remain available. */}
   };
   return <group>
-    <group position={[-1.35,0,2.25]}>
+    <group position={[-.85,0,3]} rotation={[0,Math.PI / 2,0]}>
       <mesh position={[0,.055,0]}><boxGeometry args={[1.25,.11,.75]}/><meshStandardMaterial color="#142532" metalness={.5} roughness={.4}/></mesh>
       <mesh position={[0,.55,-.12]}><boxGeometry args={[.5,1,.38]}/><meshStandardMaterial color="#294656" metalness={.45} roughness={.4}/></mesh>
       <group position={[0,1.18,0]} rotation={[-.3,0,0]}>
