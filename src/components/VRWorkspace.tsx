@@ -105,7 +105,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
     if (!renderer || !navigator.xr || pending) return;
     setPending(true); setModule('vr');
     let session: XRSession | undefined;
-    try { session = await navigator.xr.requestSession('immersive-vr', { requiredFeatures: ['local-floor'] }); await renderer.xr.setSession(session); }
+    try { session = await navigator.xr.requestSession('immersive-vr', { requiredFeatures: ['local-floor'], optionalFeatures: ['hand-tracking'] }); await renderer.xr.setSession(session); }
     catch { await session?.end().catch(() => undefined); setXRStatus('Não foi possível entrar em VR. Verifique a permissão e tente novamente.'); }
     finally { setPending(false); }
   };
@@ -183,7 +183,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
           </>}
           <Label text={activeModule === 'road' ? (flight ? 'Direito: deslocar. Esquerdo: subir/descer e virar. Grip esquerdo: prancheta.' : 'Direito: caminhar. Esquerdo: virar. Área externa: 2 m. Grip esquerdo: prancheta.') : hint} position={[0, -0.16, 0.002]} width={0.42} height={0.06} />
           <Label text={activeModule === 'vr' ? lab.message : data?.status ?? 'Carregando cenário'} position={[0, -0.22, 0.002]} width={0.42} />
-          {activeModule === 'vr' && <Label text="Reiniciar" position={[-0.108, -0.28, 0.002]} width={0.2} action={() => dispatch({ type: 'reset' })} />}<Label text="Sair do VR" position={[0.108, -0.28, 0.002]} width={0.2} action={() => void renderer?.xr.getSession()?.end()} />
+          <Label text="Sair do VR" position={[0.108, -0.28, 0.002]} width={0.2} action={() => void renderer?.xr.getSession()?.end()} />
         </XRInteraction>
       </Canvas>
     </section>

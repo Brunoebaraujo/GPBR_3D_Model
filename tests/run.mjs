@@ -402,6 +402,24 @@ try {
     assert.equal(ready(s.boxes[0]),true);assert.equal(ready(s.boxes[1]),false);
     assert.ok(Math.abs(s.boxes[1].pose.x-s.boxes[0].pose.x-MB6.w-1)<1e-9);
   });
+  const {touchButton}=await load('utils/xrTouch.js');
+  test('Physical buttons require contact, release and re-entry without trigger input',()=>{
+    let s={armed:false,pressed:false};const outside={x:0,y:0,z:.2},inside={x:0,y:0,z:.03};
+    s=touchButton(s,[inside],.5,.17);assert.equal(s.fire,false);
+    s=touchButton(s,[outside],.5,.17);assert.equal(s.armed,true);
+    s=touchButton(s,[inside],.5,.17);assert.equal(s.fire,true);
+    for(let i=0;i<10;i++){s=touchButton(s,[inside],.5,.17);assert.equal(s.fire,false);}
+    s=touchButton(s,[{...inside,z:.08}],.5,.17);assert.equal(s.fire,false);
+    s=touchButton(s,[inside],.5,.17);assert.equal(s.fire,false);
+    s=touchButton(s,[outside],.5,.17);s=touchButton(s,[inside],.5,.17);assert.equal(s.fire,true);
+  });
+  test('Button contacts reject remote, lateral and rear points and debounce two hands',()=>{
+    const armed={armed:true,pressed:false};
+    for(const p of [{x:1,y:0,z:0},{x:0,y:1,z:0},{x:0,y:0,z:1},{x:0,y:0,z:-.2}])assert.equal(touchButton(armed,[p],.5,.17).fire,false);
+    const p={x:0,y:0,z:.03};let s=touchButton(armed,[p,p],.5,.17);assert.equal(s.fire,true);
+    s=touchButton(s,[p],.5,.17);assert.equal(s.fire,false);assert.equal(s.pressed,true);
+    s=touchButton(s,[],.5,.17);assert.equal(s.pressed,false);
+  });
   const {constrainCrates}=await load('utils/xrNavigation.js');
   test('Player collision prevents crossing folded, raised and rotated crates',()=>{
     for(const yaw of [0,Math.PI/4,Math.PI/2]) {

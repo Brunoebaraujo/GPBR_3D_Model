@@ -1,3 +1,4 @@
+import { touchButton, type TouchState } from '../utils/xrTouch';
 import { constrainCrates, explorationStart, constrainExploration, type Exploration } from '../utils/xrNavigation';
 import { controllerHand } from './controllerHand';
 import { useEffect, useRef, type ReactNode } from 'react';
@@ -30,6 +31,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     const rig = new Group(); rig.position.z = 3; scene.add(rig);
     const originalParent = camera.parent;
     const saved = { position: camera.position.clone(), quaternion: camera.quaternion.clone(), fov: camera instanceof PerspectiveCamera ? camera.fov : 48 };
+    const touchStates=new Map<Object3D,TouchState>();
     const ray = new Raycaster(); ray.far = 5;
     let grab: Grab | null = null, active = false, message = '';
     let explorationKey = '';
@@ -57,6 +59,8 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     };
     const applyPose = (object: Object3D, p: Pose) => { object.position.set(p.x, p.y, p.z); object.rotation.set(0, p.yaw, 0); object.updateMatrixWorld(true); };
     const clear = (cancel: boolean) => {
+      touchStates.clear();
+      scene.traverse(o=>{if(o.userData.xrTouch)o.userData.pressed=false;});
       clearHover();
       if (grab) {
         const held = grab; grab = null;
@@ -101,6 +105,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         let boxId: number | undefined, lever: LeverTarget | undefined, activate: (() => void) | undefined, panel = false, object = hit.object as Object3D;
         let wall: Target['wall'], boxObject: Object3D | undefined;
         for (let p: Object3D | null = hit.object; p; p = p.parent) {
+          if (p.userData.xrTouch) return null;
           if (!activate && typeof p.userData.activate === 'function') activate = p.userData.activate;
           if (p.userData.xrWall && !lever) { wall = p.userData.xrWall; object = p; }
           if (p.userData.xrLever) { lever = p.userData.xrLever; object = p; }
@@ -269,6 +274,29 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           hand.update(1,hands[i].source?.handedness==='left');
         }
       });
+      // Only actual tracked fingertips/glove tips can press pedestal buttons; rays never do.
+      const touches: Vector3[]=[];
+      if(!grab && !menu && !hands.some(h=>h.down)) {
+        for(const source of session.inputSources) {
+          const joint=source.hand?.get('index-finger-tip');
+          const pose=joint && frame.getJointPose?.(joint,space);
+          if(pose) touches.push(rig.localToWorld(new Vector3(pose.transform.position.x,pose.transform.position.y,pose.transform.position.z)));
+        }
+        hands.forEach((h,i)=>{if(h.tracked && !h.source?.hand)touches.push(grips[i].localToWorld(new Vector3(0,0,-.10)));});
+      }
+      const currentButtons=new Set<Object3D>();
+      scene.traverse(object=>{
+        if(!object.userData.xrTouch)return;
+        currentButtons.add(object);
+        const enabled=visible(object) && !object.userData.disabled && !grab && !menu;
+        const state=touchStates.get(object) ?? {armed:false,pressed:false};
+        if(!enabled || touches.length===0){touchStates.set(object,{armed:false,pressed:false});object.userData.pressed=false;return;}
+        const local=touches.map(p=>object.worldToLocal(p.clone()));
+        const next=touchButton(state,local,object.userData.width,object.userData.height);
+        touchStates.set(object,next);object.userData.pressed=next.pressed;
+        if(next.fire){object.userData.onPress();feedback.current();}
+      });
+      for(const object of touchStates.keys())if(!currentButtons.has(object))touchStates.delete(object);
       clearHover();
       if (!grab && !menu) hands.forEach((hand, i) => {
         if (!hand.tracked) return;
