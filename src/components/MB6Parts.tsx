@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { LatchSupport } from './LatchSupport';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Edges, TransformControls } from '@react-three/drei';
 import { CanvasTexture, Group, Vector3, Mesh, MeshStandardMaterial, Color } from 'three';
@@ -86,7 +87,7 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
     }
   });
   return <group ref={root} position={[x, height - 0.035, 0.032]} {...gesture.events} userData={{ xrLever: { boxId: box.id, index, direction }, activate: () => operate(raised ? 'lower' : 'lift') }}>
-    <Part position={[0, 0, 0]} size={[0.15, 0.05, 0.014]} />
+    <Suspense fallback={<Part position={[0, 0, 0]} size={[0.15, 0.05, 0.014]} />}><LatchSupport direction={direction} /></Suspense>
     <Part position={[direction * 0.085, 0, 0.012]} size={[0.025, 0.045, 0.035]} color="#356b99" />
     <group ref={carriage}>
       <Part position={[0, 0, 0.018]} size={[0.12, 0.014, 0.014]} highlight={gesture.hovered} />
