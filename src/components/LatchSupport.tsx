@@ -1,5 +1,5 @@
 import handleUrl from '../assets/mb6/MB6_Ferrolho_Alavanca.stl?url';
-import { Edges } from '@react-three/drei';
+import { EdgesGeometry } from 'three';
 import { useMemo } from 'react';
 import { useLoader } from '@react-three/fiber';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
@@ -24,8 +24,12 @@ export function LatchSupport({ direction, slider = false, handle = false }: { di
     g.computeVertexNormals();
     return g;
   }, [source, support, handle]);
+  const edges = useMemo(() => new EdgesGeometry(geometry, 20), [geometry]);
   return <mesh geometry={geometry} scale={[direction, 1, 1]}>
-    <meshStandardMaterial color="#b8c5cd" metalness={.55} roughness={.38} />
-    <Edges threshold={20} color="#465564" />
+    <meshStandardMaterial color="#b8c5cd" metalness={.55} roughness={.38} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+    <lineSegments geometry={edges} raycast={() => {}}>
+      <lineBasicMaterial color="#465564" toneMapped={false} />
+    </lineSegments>
   </mesh>;
 }
+
