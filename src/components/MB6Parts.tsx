@@ -1,3 +1,4 @@
+import { VertexGuide } from './VertexGuide';
 import { DoorPull } from './DoorPull';
 import { LatchSupport } from './LatchSupport';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
@@ -140,6 +141,12 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
       {[-1, 1].map(side => <Part key={side} position={[side * (width / 2 - 0.035), 0.013, 0]} size={[0.024, 0.04, 0.014]} />)}
       <group {...gesture.events} userData={{ activate: () => act({ type: 'wall', index }) }}>
         {index === 0 && <Suspense fallback={null}><DoorPull height={height} /></Suspense>}
+        {index % 2 === 1 && [-1, 1].map(side => <group key={`guide-${side}`} position={[side * (MB6.d / 2 - MB6.inset), height + .01, -.03]}>
+          {/* Preserve the stacking centers; bridge inward from the wall to the guide. */}
+          <Part position={[0, -.0075, 0]} size={[.045, .015, .028]} />
+          <Part position={[0, -.0125, .016]} size={[.045, .005, .048]} />
+          <Suspense fallback={null}><VertexGuide /></Suspense>
+        </group>)}
         <WallNumber number={WALL_NUMBERS[index]} height={height} />
         <Part position={[0, height / 2, 0]} size={[width, height, 0.012]} highlight={gesture.hovered} />
         {[-1, 0, 1].map(x => <Part key={x} position={[x * (width / 2 - 0.025), height / 2, 0.008]} size={[0.025, height, 0.012]} highlight={gesture.hovered} />)}
@@ -204,7 +211,7 @@ export function Crate({ box, selected, tool, dispatch, onPose, interaction }: { 
       </group>)}
       {[-1, 1].flatMap(x => [-1, 1].map(z => <group key={`${x}${z}`} position={[x * (MB6.w / 2 - MB6.inset), 0, z * (MB6.d / 2 - MB6.inset)]}>
         {[-1, 1].map(sign => <group key={sign}><Part position={[sign * 0.036, MB6.foot / 2, 0]} size={[0.018, MB6.foot, 0.09]} color="#2563ac" /><Part position={[0, MB6.foot / 2, sign * 0.036]} size={[0.054, MB6.foot, 0.018]} color="#2563ac" /></group>)}
-        {box.walls.every(Boolean) && <Part position={[0, MB6.h - MB6.pin / 2, 0]} size={[0.045, MB6.pin, 0.045]} color="#33c9b2" />}
+
       </group>))}
       {box.walls.map((_, i) => <Wall key={i} index={i} box={box} act={act} interaction={interaction} />)}
       <Lid box={box} act={act} interaction={interaction} />
@@ -212,3 +219,4 @@ export function Crate({ box, selected, tool, dispatch, onPose, interaction }: { 
     {selected && group && tool !== 'assemble' && <TransformControls object={group} mode={tool} showX={tool !== 'rotate'} showY showZ={tool !== 'rotate'} space="world" translationSnap={0.01} rotationSnap={Math.PI / 36} onMouseDown={() => interaction.busy(true)} onMouseUp={commit} />}
   </>;
 }
+
