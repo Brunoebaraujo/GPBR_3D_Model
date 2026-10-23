@@ -1,8 +1,12 @@
-# Imported latch components
+# Imported latch assembly
 
-Support: original user STL, 220 triangles, 150 x 50 x 28 mm.
-Slider: extracted from the second user STL, which included all 220 unchanged support triangles plus 92 slider triangles. Only matching support triangles were removed; slider coordinates and geometry were preserved. Slider envelope: 120 x 6 x 6 mm.
+Reference: user-provided MB6_Ferrolho_Alavanca.stl, explicitly exported unlocked.
+The combined file contains the unchanged 220-triangle support, a 92-triangle slider and a 202-triangle handle. The latter two were isolated without altering their coordinates.
 
-Both parts use the support bounding-box XY center and minimum Z as the registration reference. The submitted slider position is the locked endpoint: center (+15,+10,+20) mm relative to that reference. Retraction subtracts 38 mm from X. Both meshes are mirrored together for opposite latch sides. App depth includes the existing -7 mm rear-face offset. The old handle follows the new bar center; it remains a placeholder until replaced.
+Support registration: XY center (502.49591064453125, 391.4358215332031) mm, rear Z=0. Conversion to app meters retains the existing rear-face depth of -7 mm.
 
-Contours use a 20-degree crease threshold. This is visual integration, not mechanical collision certification.
+Unlocked slider center relative to support: (-10, 10, 20) mm; envelope 120 x 6 x 6 mm. No additional slider offset is applied. This is 27 mm left of the previous published unlocked position; the supplied geometry takes precedence over the approximate request to reduce the previous offset by 20 mm. Travel remains +38 mm toward the receiver.
+
+Handle envelope: 30 x 118 x 2 mm. Inferred pivot is center of the upper stem edge, (-56, 6, 21) mm relative to support registration. The STL contains no joint metadata; this pivot is an integration assumption, not a measured hinge. At rest, the mesh reproduces the submitted assembly exactly. Opening remains 66 degrees about horizontal X. Handle and slider translate together. Opposite latches mirror X.
+
+Both movable components and support retain edge outlines. Physical clearances are not certified by the application state-machine tests.
