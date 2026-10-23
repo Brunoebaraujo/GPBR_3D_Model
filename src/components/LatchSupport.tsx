@@ -17,7 +17,7 @@ export function LatchSupport({ direction, slider = false }: { direction: number;
     // in the existing latch frame, exactly where the old support began.
     g.translate(-(bounds.min.x + bounds.max.x) / 2, -(bounds.min.y + bounds.max.y) / 2, -bounds.min.z);
     g.scale(.001, .001, .001);
-    g.translate(slider ? -.038 : 0, 0, -.007);
+    g.translate(slider ? .002 : 0, 0, -.007);
     g.computeVertexNormals();
     return g;
   }, [source, support, slider]);
@@ -26,4 +26,3 @@ export function LatchSupport({ direction, slider = false }: { direction: number;
     <Edges threshold={20} color="#465564" />
   </mesh>;
 }
-
