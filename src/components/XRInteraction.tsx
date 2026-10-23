@@ -4,7 +4,7 @@ import { controllerHand } from './controllerHand';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { BoxGeometry, SphereGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
-import { MB6, WALL_PIVOT_Y, supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
+import { wallGrabPoint, supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
 import { canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, navigateRig, gripHeld, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
 type Props = { exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
@@ -163,7 +163,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         h.wallStart = b.walls[target.wall.index] ? 0 : -Math.PI / 2;
         const parent = target.object.parent!;
         h.anchor.copy(parent.worldToLocal(point(i)));
-        const hit = parent.worldToLocal(target.hit.clone()); h.radius = Math.hypot(hit.y,hit.z);
+        const grip = wallGrabPoint(target.wall.index); h.radius = Math.hypot(grip.y, grip.z);
         target.object.userData.xrHeld = true; target.object.rotation.x = h.wallStart;
         hint('Parede segura: mantenha o gatilho e puxe até a posição final. Soltar antes devolve a parede.'); return;
       }
@@ -269,7 +269,8 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         hand.root.visible=holding;
         if(holding && target?.wall){
           models[i].root.visible=false;
-          hand.root.position.copy(target.object.localToWorld(new Vector3(0,MB6.h-.035-WALL_PIVOT_Y[target.wall.index],.025)));
+          const grip = wallGrabPoint(target.wall.index);
+          hand.root.position.copy(target.object.localToWorld(new Vector3(grip.x,grip.y,grip.z)));
           hand.root.quaternion.copy(target.object.getWorldQuaternion(new Quaternion()));
           hand.update(1,hands[i].source?.handedness==='left');
         }

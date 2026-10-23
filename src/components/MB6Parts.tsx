@@ -1,9 +1,10 @@
+import { DoorPull } from './DoorPull';
 import { LatchSupport } from './LatchSupport';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Edges, TransformControls } from '@react-three/drei';
 import { CanvasTexture, Group, Vector3, Mesh, MeshStandardMaterial, Color } from 'three';
-import { MB6, WALL_PIVOT_Y, WALL_SEATING_TRAVEL, MB6_VISUAL_COLLAPSED, wallMotion, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
+import { MB6, WALL_NUMBERS, WALL_PIVOT_Y, WALL_SEATING_TRAVEL, MB6_VISUAL_COLLAPSED, wallMotion, leverGesture, type Action, type Assembly, type Pose, type LeverStep } from '../utils/mb6Assembly';
 import { playAssemblySound } from '../utils/assemblyAudio';
 
 type Vec = [number, number, number];
@@ -91,7 +92,7 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
     <Part position={[direction * 0.085, 0, 0.012]} size={[0.025, 0.045, 0.035]} color="#356b99" />
     <group ref={carriage}>
       <Suspense fallback={null}><LatchSupport direction={direction} slider /></Suspense>
-      <group ref={handle} position={[-.056 * direction, .006, .014]}>
+      <group ref={handle} position={[-.056 * direction, .008609009, .014]}>
         <Suspense fallback={null}><LatchSupport direction={direction} handle /></Suspense>
       </group>
     </group>
@@ -138,7 +139,8 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
     <group ref={ref} position={[0, index === 0 ? WALL_SEATING_TRAVEL : 0, 0]} rotation={[-Math.PI / 2, 0, 0]} userData={wallData}>
       {[-1, 1].map(side => <Part key={side} position={[side * (width / 2 - 0.035), 0.013, 0]} size={[0.024, 0.04, 0.014]} />)}
       <group {...gesture.events} userData={{ activate: () => act({ type: 'wall', index }) }}>
-        <WallNumber number={index + 1} height={height} />
+        {index === 0 && <Suspense fallback={null}><DoorPull height={height} /></Suspense>}
+        <WallNumber number={WALL_NUMBERS[index]} height={height} />
         <Part position={[0, height / 2, 0]} size={[width, height, 0.012]} highlight={gesture.hovered} />
         {[-1, 0, 1].map(x => <Part key={x} position={[x * (width / 2 - 0.025), height / 2, 0.008]} size={[0.025, height, 0.012]} highlight={gesture.hovered} />)}
         {[0, 0.5, 1].map(y => <Part key={y} position={[0, y * (height - 0.02), 0.008]} size={[width, 0.02, 0.012]} highlight={gesture.hovered} />)}

@@ -3,6 +3,11 @@ import { MB6_CONTAINER } from '../data/skus';
 // Envelope and collapsed height checked against GP TDS MB6, Feb 27 2023.
 // Joint/lever dimensions remain visual estimates: the TDS does not dimension them.
 export const MB6 = { w: MB6_CONTAINER.externalDimensions.width / 1000, d: MB6_CONTAINER.externalDimensions.depth / 1000, h: MB6_CONTAINER.externalDimensions.height / 1000, collapsed: 0.224, lidWeightKg: 10.6, foot: 0.07, inset: 0.055, pin: 0.025, tolerance: 0.035 };
+export const WALL_NUMBERS = [4, 1, 3, 2] as const;
+export const wallGrabPoint = (index: number) => {
+  const height = MB6.h - .035 - WALL_PIVOT_Y[index];
+  return { x: 0, y: index === 0 ? height / 2 + .01 : height, z: index === 0 ? .023 : .025 };
+};
 export const WALL_NAMES = ['Frente', 'Direita', 'Fundo', 'Esquerda'];
 // Indices remain clockwise for corner/bolt adjacency. Assembly is a separate order.
 export const ASSEMBLY_ORDER = [0, 2, 3, 1] as const;
