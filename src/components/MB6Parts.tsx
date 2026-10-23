@@ -91,9 +91,8 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
     <Part position={[direction * 0.085, 0, 0.012]} size={[0.025, 0.045, 0.035]} color="#356b99" />
     <group ref={carriage}>
       <Suspense fallback={null}><LatchSupport direction={direction} slider /></Suspense>
-      <group ref={handle} position={[.017 * direction, .01, -.005]}>
-        <Part position={[0, -0.035, 0.022]} size={[0.016, 0.07, 0.015]} highlight={gesture.hovered} />
-        <mesh position={[0, -0.105, 0.022]} scale={[1, 1.75, 1]}><torusGeometry args={[0.025, 0.006, 8, 32]} /><meshStandardMaterial color="#b8c5cd" metalness={0.55} roughness={0.38} emissive={gesture.hovered ? '#26bba5' : '#000000'} emissiveIntensity={0.3} /></mesh>
+      <group ref={handle} position={[-.056 * direction, .006, .014]}>
+        <Suspense fallback={null}><LatchSupport direction={direction} handle /></Suspense>
       </group>
     </group>
     <Part position={[0, -0.18, 0]} size={[0.065, 0.018, 0.005]} color={box.locks[index] ? '#1bc89d' : '#efa94c'} />
