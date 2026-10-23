@@ -353,7 +353,7 @@ try {
     const pair=findRoadBatch(side,base,2);assert.equal(pair.length,2);
     assert.equal(validateRoad({...side,units:pair,vehicle:{...side.vehicle,sideHeight:2000}}).valid,false);
   });
-  const { initialLab, reduceLab, ready, fitsStack, MB6, boxHeight, leverGesture, ASSEMBLY_ORDER, FOLD_ORDER, WALL_PIVOT_Y, WALL_SEATING_TRAVEL, MB6_VISUAL_COLLAPSED, LEVER_FOLDED_PROJECTION, wallMotion } = await load('utils/mb6Assembly.js');
+  const { initialLab, reduceLab, ready, fitsStack, WALL_NUMBERS, wallGrabPoint, MB6, boxHeight, leverGesture, ASSEMBLY_ORDER, FOLD_ORDER, WALL_PIVOT_Y, WALL_SEATING_TRAVEL, MB6_VISUAL_COLLAPSED, LEVER_FOLDED_PROJECTION, wallMotion } = await load('utils/mb6Assembly.js');
   const operateLever = (state, index) => ['lift', 'slide', 'lower'].reduce((s, step) => reduceLab(s, { type: 'lever', index, step }), state);
   const assemble = state => {
     state = reduceLab(state, { type: 'lid' });
@@ -744,6 +744,11 @@ try {
     const held=wallMotion(0,-.2,WALL_SEATING_TRAVEL,2,true,true,.02);
     assert.equal(held.angle,-.2);assert.equal(held.lift,WALL_SEATING_TRAVEL);
     assert.equal(wallMotion(2,-.2,0,0,true,false,.02).lift,0);
+  });
+  test('Door numbering changes labels without changing assembly order; door 4 grip is centered', () => {
+    assert.deepEqual([...WALL_NUMBERS],[4,1,3,2]);
+    assert.deepEqual(ASSEMBLY_ORDER.map(i=>WALL_NUMBERS[i]),[4,3,2,1]);
+    for(let i=0;i<4;i++) {const p=wallGrabPoint(i),height=MB6.h-.035-WALL_PIVOT_Y[i];assert.equal(p.x,0);assert.equal(p.y,i===0?height/2+.01:height);}
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }

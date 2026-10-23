@@ -4,7 +4,7 @@ import { useEffect, useMemo, useReducer, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { CanvasTexture, WebGLRenderer } from 'three';
-import { MB6, WALL_NAMES, ASSEMBLY_ORDER, initialLab, reduceLab, ready, type Pose, type LeverStep } from '../utils/mb6Assembly';
+import { MB6, WALL_NUMBERS, WALL_NAMES, ASSEMBLY_ORDER, initialLab, reduceLab, ready, type Pose, type LeverStep } from '../utils/mb6Assembly';
 import { Crate, type MouseTool } from './MB6Parts';
 import { AssemblyChallenge } from './AssemblyChallenge';
 import { XRInteraction } from './XRInteraction';
@@ -123,7 +123,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
   const lever = (step: LeverStep) => dispatch({ type: 'lever', index: corner, step });
   const actions = [
     { label: selected.lid ? 'Retirar tampa' : 'Colocar tampa', run: () => dispatch({ type: 'lid' }) },
-    ...ASSEMBLY_ORDER.map(i => ({ label: `${selected.walls[i] ? 'Dobrar' : 'Montar'} ${WALL_NAMES[i]}`, run: () => dispatch({ type: 'wall', index: i }) })),
+    ...ASSEMBLY_ORDER.map(i => ({ label: `${selected.walls[i] ? 'Dobrar' : 'Montar'} Porta ${WALL_NUMBERS[i]} · ${WALL_NAMES[i]}`, run: () => dispatch({ type: 'wall', index: i }) })),
     { label: `Alavanca ${corner + 1}: levantar`, run: () => lever('lift') },
     { label: `Alavanca ${corner + 1}: deslizar`, run: () => lever('slide') },
     { label: `Alavanca ${corner + 1}: rebater`, run: () => lever('lower') },
@@ -157,12 +157,12 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
       <p>{selected.walls.filter(Boolean).length}/4 paredes · {selected.locks.filter(Boolean).length}/4 travas · {selected.support ? 'Empilhada' : ready(selected) ? 'Pronta' : 'Em montagem'}<br />Rotação: {Math.round(selected.pose.yaw * 180 / Math.PI)}°</p>
       {module === 'desktop' && <div className="vr-corners" aria-label="Vértices">{selected.locks.map((locked, i) => <button key={i} aria-pressed={corner === i} onClick={() => chooseCorner(i)}>V{i + 1} · {locked ? 'travado' : selected.leverRaised[i] ? 'alça aberta' : 'livre'}</button>)}</div>}
       <p className="vr-lever-guide">Alavanca {corner + 1}: <strong>1. Levantar → 2. Deslizar → 3. Rebater</strong><br />Para destravar, repita as três etapas recolhendo o ferrolho.</p>
-      <p>Montagem: Frente → Fundo → Esquerda → Direita.<br />Desmontagem na ordem inversa. Recolhida, de baixo para cima: Direita → Esquerda → Fundo → Frente → Tampa.</p>
+      <p>Montagem: Porta 4 (Frente) → 3 (Fundo) → 2 (Esquerda) → 1 (Direita).<br />Desmontagem na ordem inversa. Recolhida, de baixo para cima: Direita → Esquerda → Fundo → Frente → Tampa.</p>
       {module === 'desktop' && <><details open><summary>Comandos de apoio</summary><div className="vr-actions">{actions.map(a => <button key={a.label} onClick={a.run}>{a.label}</button>)}</div></details>
       <h2>Alinhamento dos pés</h2><small>Eleve, aproxime, ajuste X em −20 mm três vezes e teste. Gire para experimentar um encaixe incompatível.</small>
       {(['x', 'y', 'z'] as const).map(axis => <div className="vr-row" key={axis}><span>{axis.toUpperCase()} {Math.round(selected.pose[axis] * 1000)} mm</span>{[-0.02, 0.02].map(d => <button key={d} aria-label={`${axis.toUpperCase()} ${d > 0 ? '+' : '−'}20 mm`} onClick={() => move(axis, d)}>{d > 0 ? '+' : '−'}20</button>)}</div>)}
       </>}<button onClick={() => dispatch({ type: 'reset' })}>Reiniciar laboratório</button>
-      <p className="vr-note">Ficha: recolhida 224 mm; tampa 10,6 kg. A folga visual da parede 1 usa curso ilustrativo de 50 mm; o envelope recolhido exibido é maior que a cota nominal. Alavancas reproduzem a sequência visual do vídeo. Cotas dos fechos e encaixes não constam na ficha e continuam aproximadas.</p>
+      <p className="vr-note">Ficha: recolhida 224 mm; tampa 10,6 kg. A folga visual da porta 4 usa curso ilustrativo de 50 mm; o envelope recolhido exibido é maior que a cota nominal. Alavancas reproduzem a sequência visual do vídeo. Cotas dos fechos e encaixes não constam na ficha e continuam aproximadas.</p>
     </aside>
     <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status"><span className="vr-mode-label">{module === 'desktop' ? 'DESKTOP · MOUSE' : 'VR · HEADSET'}</span>{lab.message}</div><div className="vr-mouse-hint">{hint}</div>
       <Canvas camera={{ position: [2.4, 2.2, 3.5], fov: 48 }}><color attach="background" args={['#101e2a']} /><ambientLight intensity={1.8} /><directionalLight position={[3, 7, 4]} intensity={3} />

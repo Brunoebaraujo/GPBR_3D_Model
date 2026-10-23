@@ -20,7 +20,7 @@ export function LatchSupport({ direction, slider = false, handle = false }: { di
     g.scale(.001, .001, .001);
     g.translate(0, 0, -.007);
     // Handle-local coordinates around the center of its upper stem edge.
-    if (handle) g.translate(.056, -.006, -.014);
+    if (handle) g.translate(.056, -.008609009, -.014);
     g.computeVertexNormals();
     return g;
   }, [source, support, handle]);
