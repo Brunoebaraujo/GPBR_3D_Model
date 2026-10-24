@@ -28,6 +28,14 @@ try {
   const clones = (p, result) => result.positions.map((position, i) => ({ ...p, id: `test-${i}`, position }));
   let passed = 0;
   const test = (name, fn) => { fn(); passed++; process.stdout.write(`✓ ${name}\n`); };
+  const { boxGrabCorner } = await load('utils/xrInteraction.js');
+  test('Box lifting accepts distinct upper corners and rejects wall centers and feet', () => {
+    const corners=[];
+    for (const x of [-.505,.505]) for (const z of [-.555,.555]) corners.push(boxGrabCorner({x,y:1.04,z}));
+    assert.equal(new Set(corners).size,4);
+    assert.ok(corners.every(c=>c!==null));
+    for (const p of [{x:0,y:1.04,z:.6},{x:.55,y:.5,z:0},{x:.505,y:.07,z:.555},{x:NaN,y:1.04,z:.555}]) assert.equal(boxGrabCorner(p),null);
+  });
   test('Grid capacity, payload limit, and generated placement are consistent', () => {
     const result = calculateGridPacking(MB5_CONTAINER, product);
     assert.equal(result.totalQuantity, 210); assert.equal(result.payloadLimitedQuantity, 165);

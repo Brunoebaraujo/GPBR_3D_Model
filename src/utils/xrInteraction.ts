@@ -1,5 +1,5 @@
 import type { Assembly, Lab, LeverStep, Pose } from './mb6Assembly';
-import { ready } from './mb6Assembly';
+import { MB6, ready } from './mb6Assembly';
 
 export type Point3 = { x: number; y: number; z: number };
 export type XRPad = { mapping: string; buttons: ReadonlyArray<{ pressed: boolean; value: number }>; axes: readonly number[] };
@@ -79,3 +79,10 @@ export function wallPullAngle(start: number, radius: number, delta: Point3): num
   return Math.max(-Math.PI / 2, Math.min(0, start < -.12 ? Math.max(arc,lift) : arc));
 }
 export const wallPullComplete = (angle: number, raising: boolean) => raising ? angle >= -.12 : angle <= -Math.PI / 2 + .12;
+
+// A forgiving 12 cm target around each upper corner, never the wall center.
+export function boxGrabCorner(point: Point3): number | null {
+  if (![point.x,point.y,point.z].every(Number.isFinite) || Math.abs(point.y-(MB6.h-.04)) > .12) return null;
+  if (Math.abs(Math.abs(point.x)-(MB6.w/2-MB6.inset)) > .12 || Math.abs(Math.abs(point.z)-(MB6.d/2-MB6.inset)) > .12) return null;
+  return (point.x >= 0 ? 1 : 0) + (point.z >= 0 ? 2 : 0);
+}

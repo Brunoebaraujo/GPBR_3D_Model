@@ -5,7 +5,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { BoxGeometry, SphereGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
 import { wallGrabPoint, supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
-import { canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, navigateRig, gripHeld, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
+import { boxGrabCorner, canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, navigateRig, gripHeld, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
 type Props = { exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
 type LeverTarget = { boxId: number; index: number; direction: number };
@@ -139,10 +139,12 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       }
       const b = latest.current.lab.boxes.find(b => b.id === target.boxId);
       if (b && canGrabBox(latest.current.lab, b)) {
+        const corner = target.boxObject ? boxGrabCorner(target.boxObject.worldToLocal(target.hit.clone())) : null;
+        if (corner === null) { h.target=null; hint('Para levantar, mire nos vértices superiores, não no meio das paredes.'); return; }
         const other = hands[1 - i];
         if (other.down && other.tracked && other.target?.boxId === b.id && hands[0].source?.handedness !== hands[1].source?.handedness) {
           const first = aim(1-i);
-          if (first?.boxId !== b.id || !first.boxObject) { hint('Aponte os dois controles para a mesma caixa e pressione novamente o segundo gatilho.'); h.down=false; h.target=null; return; }
+          if (first?.boxId !== b.id || !first.boxObject || boxGrabCorner(first.boxObject.worldToLocal(first.hit.clone())) === null || boxGrabCorner(first.boxObject.worldToLocal(first.hit.clone())) === corner) { hint('Mire em dois vértices superiores diferentes da mesma caixa e pressione novamente o segundo gatilho.'); h.down=false; h.target=null; return; }
           const hits: [Vector3, Vector3] = i === 0 ? [target.hit.clone(), first.hit.clone()] : [first.hit.clone(), target.hit.clone()];
           const object = target.boxObject!;
           object.updateWorldMatrix(true, false);
@@ -151,7 +153,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
             anchors:[object.worldToLocal(hits[0].clone()), object.worldToLocal(hits[1].clone())] };
           clearHover();
           send({ type: 'select', id: b.id }); hint('Pontos fixados: mova e gire os controles para posicionar a caixa. Alcance constante; encaixe automático.');
-        } else hint('Mantenha este gatilho e aponte a outra mão para a mesma caixa.');
+        } else hint('Mantenha este gatilho e aponte a outra mão para outro vértice superior da mesma caixa.');
         return;
       }
       if (target.wall && b) {
