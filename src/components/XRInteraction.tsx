@@ -140,11 +140,11 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const b = latest.current.lab.boxes.find(b => b.id === target.boxId);
       if (b && canGrabBox(latest.current.lab, b)) {
         const corner = target.boxObject ? boxGrabCorner(target.boxObject.worldToLocal(target.hit.clone())) : null;
-        if (corner === null) { h.target=null; hint('Para levantar, mire nos vértices superiores, não no meio das paredes.'); return; }
+        if (corner === null) { h.target=null; hint('Para levantar, mire nas arestas verticais, não no meio das paredes.'); return; }
         const other = hands[1 - i];
         if (other.down && other.tracked && other.target?.boxId === b.id && hands[0].source?.handedness !== hands[1].source?.handedness) {
           const first = aim(1-i);
-          if (first?.boxId !== b.id || !first.boxObject || boxGrabCorner(first.boxObject.worldToLocal(first.hit.clone())) === null || boxGrabCorner(first.boxObject.worldToLocal(first.hit.clone())) === corner) { hint('Mire em dois vértices superiores diferentes da mesma caixa e pressione novamente o segundo gatilho.'); h.down=false; h.target=null; return; }
+          if (first?.boxId !== b.id || !first.boxObject || boxGrabCorner(first.boxObject.worldToLocal(first.hit.clone())) === null || boxGrabCorner(first.boxObject.worldToLocal(first.hit.clone())) === corner) { hint('Mire em duas arestas verticais diferentes da mesma caixa e pressione novamente o segundo gatilho.'); h.down=false; h.target=null; return; }
           const hits: [Vector3, Vector3] = i === 0 ? [target.hit.clone(), first.hit.clone()] : [first.hit.clone(), target.hit.clone()];
           const object = target.boxObject!;
           object.updateWorldMatrix(true, false);
@@ -153,7 +153,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
             anchors:[object.worldToLocal(hits[0].clone()), object.worldToLocal(hits[1].clone())] };
           clearHover();
           send({ type: 'select', id: b.id }); hint('Pontos fixados: mova e gire os controles para posicionar a caixa. Alcance constante; encaixe automático.');
-        } else hint('Mantenha este gatilho e aponte a outra mão para outro vértice superior da mesma caixa.');
+        } else hint('Mantenha este gatilho e aponte a outra mão para outro canto vertical da mesma caixa.');
         return;
       }
       if (target.wall && b) {

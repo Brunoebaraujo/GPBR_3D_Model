@@ -80,9 +80,9 @@ export function wallPullAngle(start: number, radius: number, delta: Point3): num
 }
 export const wallPullComplete = (angle: number, raising: boolean) => raising ? angle >= -.12 : angle <= -Math.PI / 2 + .12;
 
-// A forgiving 12 cm target around each upper corner, never the wall center.
+// A forgiving 12 cm target along each vertical corner, never the wall center.
 export function boxGrabCorner(point: Point3): number | null {
-  if (![point.x,point.y,point.z].every(Number.isFinite) || Math.abs(point.y-(MB6.h-.04)) > .12) return null;
+  if (![point.x,point.y,point.z].every(Number.isFinite) || point.y < MB6.foot || point.y > MB6.h) return null;
   if (Math.abs(Math.abs(point.x)-(MB6.w/2-MB6.inset)) > .12 || Math.abs(Math.abs(point.z)-(MB6.d/2-MB6.inset)) > .12) return null;
   return (point.x >= 0 ? 1 : 0) + (point.z >= 0 ? 2 : 0);
 }
