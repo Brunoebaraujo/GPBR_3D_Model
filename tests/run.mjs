@@ -29,12 +29,19 @@ try {
   let passed = 0;
   const test = (name, fn) => { fn(); passed++; process.stdout.write(`✓ ${name}\n`); };
   const { boxGrabCorner } = await load('utils/xrInteraction.js');
-  test('Box lifting accepts distinct upper corners and rejects wall centers and feet', () => {
-    const corners=[];
-    for (const x of [-.505,.505]) for (const z of [-.555,.555]) corners.push(boxGrabCorner({x,y:1.04,z}));
-    assert.equal(new Set(corners).size,4);
-    assert.ok(corners.every(c=>c!==null));
-    for (const p of [{x:0,y:1.04,z:.6},{x:.55,y:.5,z:0},{x:.505,y:.07,z:.555},{x:NaN,y:1.04,z:.555}]) assert.equal(boxGrabCorner(p),null);
+  test('Box lifting accepts the full vertical corners with stable IDs and rejects wall centers', () => {
+    let baseline;
+    for (const y of [.07,.08,.25,.5,.8,1.04,1.076]) {
+      const corners=[];
+      for (const x of [-.505,.505]) for (const z of [-.555,.555]) corners.push(boxGrabCorner({x,y,z}));
+      assert.equal(new Set(corners).size,4);
+      assert.ok(corners.every(c=>c!==null));
+      if (baseline) assert.deepEqual(corners,baseline); else baseline=corners;
+      assert.equal(boxGrabCorner({x:0,y,z:.6}),null);
+      assert.equal(boxGrabCorner({x:.55,y,z:0}),null);
+    }
+    for (const y of [-1,.069,1.077,NaN,Infinity]) assert.equal(boxGrabCorner({x:.505,y,z:.555}),null);
+    assert.equal(boxGrabCorner({x:NaN,y:.5,z:.555}),null);
   });
   test('Grid capacity, payload limit, and generated placement are consistent', () => {
     const result = calculateGridPacking(MB5_CONTAINER, product);
