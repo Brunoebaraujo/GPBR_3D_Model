@@ -43,6 +43,14 @@ try {
     for (const y of [-1,.069,1.077,NaN,Infinity]) assert.equal(boxGrabCorner({x:.505,y,z:.555}),null);
     assert.equal(boxGrabCorner({x:NaN,y:.5,z:.555}),null);
   });
+  const assemblyTest = await load('utils/mb6Assembly.js');
+  test('Test setup creates two ready unstacked crates and reset exits practice', () => {
+    const lab=assemblyTest.reduceLab(assemblyTest.initialLab(),{type:'prepare-test'});
+    assert.equal(lab.practice,true);assert.equal(lab.selected,2);assert.equal(lab.boxes.length,2);
+    assert.ok(lab.boxes.every(b=>assemblyTest.ready(b)&&b.support===null&&b.pose.y===0));
+    assert.ok(lab.boxes[1].pose.x-lab.boxes[0].pose.x>assemblyTest.MB6.w);
+    assert.ok(!assemblyTest.reduceLab(lab,{type:'reset'}).practice);
+  });
   test('Grid capacity, payload limit, and generated placement are consistent', () => {
     const result = calculateGridPacking(MB5_CONTAINER, product);
     assert.equal(result.totalQuantity, 210); assert.equal(result.payloadLimitedQuantity, 165);

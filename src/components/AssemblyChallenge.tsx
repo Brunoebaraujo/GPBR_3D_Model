@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
-import type { Group } from 'three';
+import { createPortal, useFrame, useThree } from '@react-three/fiber';
+import { Vector3, Quaternion, type Group } from 'three';
 import type { Action, Lab } from '../utils/mb6Assembly';
 import { Label } from './VRWorkspace';
 import { PanelText, TouchButton } from './TouchButton';
@@ -24,15 +24,24 @@ function Completed() {
   </group>;
 }
 export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>void}) {
+  const {gl,camera,scene}=useThree();
+  const [keyboardPose,setKeyboardPose]=useState({position:[0,1,0] as [number,number,number],yaw:0});
   const [fallback,setFallback]=useState(false);
   const [started,setStarted]=useState<number|null>(null),[elapsed,setElapsed]=useState(0);
   const [finished,setFinished]=useState(false),[saved,setSaved]=useState(false),[name,setName]=useState('');
   const [scores,setScores]=useState(readScores);
   useEffect(()=>{if(!finished || saved)setFallback(false);},[finished,saved]);
   // Keep text entry inside XR: native focus can suspend the Quest session.
-  const editName=()=>setFallback(true);
+  const editName=()=>{
+    const view=gl.xr.isPresenting?gl.xr.getCamera():camera;
+    const eye=view.getWorldPosition(new Vector3());
+    const forward=new Vector3(0,0,-1).applyQuaternion(view.getWorldQuaternion(new Quaternion()));
+    const yaw=Math.atan2(-forward.x,-forward.z);
+    setKeyboardPose({position:[eye.x+Math.cos(yaw)*.95,Math.max(.65,eye.y-.4),eye.z-Math.sin(yaw)*.95],yaw:yaw-Math.PI/2});
+    setFallback(true);
+  };
   const starting=useRef(false);
-  const complete=lab.boxes.some(b=>b.id===2 && b.support===1);
+  const complete=!lab.practice && lab.boxes.some(b=>b.id===2 && b.support===1);
   useEffect(()=>{
     if(started===null || finished)return;
     if(complete){setElapsed(performance.now()-started);setFinished(true);return;}
@@ -40,6 +49,7 @@ export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>v
     return()=>clearInterval(id);
   },[started,finished,complete]);
   // A laboratory reset cancels an attempt without adding a score.
+  useEffect(()=>{if(lab.practice){setStarted(null);setFinished(false);setSaved(false);setFallback(false);}},[lab.practice]);
   const first=lab.boxes[0];
   useEffect(()=>{
     if(starting.current){starting.current=false;return;}
@@ -72,9 +82,9 @@ export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>v
       {finished && !saved && <group position={[0,1.82,-.17]}>
         <mesh position={[0,0,-.05]}><boxGeometry args={[1.38,.48,.10]}/><meshStandardMaterial color="#203947"/></mesh>
         <PanelText text={name || 'QUAL É O SEU NOME?'} width={1.25} height={.14} position={[0,.10,.006]}/>
-        <TouchButton text={fallback?'FECHAR TECLADO 3D':'USAR TECLADO 3D'} position={[0,-.11,.04]} width={1.05} height={.12} onPress={()=>{setFallback(v=>!v);}}/>
+        <TouchButton text={fallback?'FECHAR TECLADO 3D':'USAR TECLADO 3D'} position={[0,-.11,.04]} width={1.05} height={.12} onPress={()=>{if(fallback)setFallback(false);else editName();}}/>
       </group>}
-      {finished && !saved && fallback && <group position={[0,1.14,.62]} rotation={[-.55,0,0]}>
+      {finished && !saved && fallback && createPortal(<group position={keyboardPose.position} rotation={[0,keyboardPose.yaw,0]}><group rotation={[-.4,0,0]} scale={.65}><group position={[-.3,0,0]}>
         <mesh position={[0,-.05,-.07]}><boxGeometry args={[1.42,.93,.14]}/><meshStandardMaterial color="#203947"/></mesh>
         <PanelText text={(name || 'SEU NOME') + '  |'} width={1.3} height={.12} position={[0,.48,.04]}/>
         {['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'].map((row,r)=>row.split('').map((char,i)=><TouchButton key={char} text={char} position={[(i-(row.length-1)/2)*.135,.28-r*.18,.025]} width={.113} height={.14} onPress={()=>setName(n=>(n+char).slice(0,18))}/>))}
@@ -87,7 +97,7 @@ export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>v
         <TouchButton text="ESPAÇO" position={[-.46,-.29,.025]} width={.39} height={.13} onPress={()=>setName(n=>(n+' ').slice(0,18))}/>
         <TouchButton text="APAGAR" position={[0,-.29,.025]} width={.39} height={.13} onPress={()=>setName(n=>n.slice(0,-1))}/>
         <TouchButton text="SALVAR" position={[.46,-.29,.025]} width={.39} height={.13} disabled={!name.trim()} onPress={save}/>
-      </group>}
+      </group></group></group>,scene)}
     </group>
     <Label text="PLACAR · MONTAGEM MB6" position={[0,2.45,-2.3]} width={3.2} height={.25}/>
     {scores.length===0 && <Label text="Complete as duas caixas e registre seu tempo" position={[0,2.1,-2.3]} width={3.2} height={.2}/>}
