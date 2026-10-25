@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal, useFrame, useThree } from '@react-three/fiber';
-import { Vector3, Quaternion, type Group } from 'three';
+import type { Group } from 'three';
 import type { Action, Lab } from '../utils/mb6Assembly';
 import { Label } from './VRWorkspace';
 import { PanelText, TouchButton } from './TouchButton';
@@ -24,22 +24,18 @@ function Completed() {
   </group>;
 }
 export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>void}) {
-  const {gl,camera,scene}=useThree();
-  const [keyboardPose,setKeyboardPose]=useState({position:[0,1,0] as [number,number,number],yaw:0});
+  const {scene}=useThree();
+  // Pedestal front edge: x=-.85+.75/2. Facing its controls, right is -Z.
+  // Start the keyboard at that edge; .30 m right + .50 m toward the scoreboard.
+  // Its left edge is -.71*.65 from the origin. Yaw 0 is perpendicular to pedestal yaw PI/2.
+  const keyboardPosition: [number,number,number]=[-.85+.75/2+.71*.65,1.14,3-.3-.5];
   const [fallback,setFallback]=useState(false);
   const [started,setStarted]=useState<number|null>(null),[elapsed,setElapsed]=useState(0);
   const [finished,setFinished]=useState(false),[saved,setSaved]=useState(false),[name,setName]=useState('');
   const [scores,setScores]=useState(readScores);
   useEffect(()=>{if(!finished || saved)setFallback(false);},[finished,saved]);
   // Keep text entry inside XR: native focus can suspend the Quest session.
-  const editName=()=>{
-    const view=gl.xr.isPresenting?gl.xr.getCamera():camera;
-    const eye=view.getWorldPosition(new Vector3());
-    const forward=new Vector3(0,0,-1).applyQuaternion(view.getWorldQuaternion(new Quaternion()));
-    const yaw=Math.atan2(-forward.x,-forward.z);
-    setKeyboardPose({position:[eye.x+Math.cos(yaw)*.95,Math.max(.65,eye.y-.4),eye.z-Math.sin(yaw)*.95],yaw:yaw-Math.PI/2});
-    setFallback(true);
-  };
+  const editName=()=>setFallback(true);
   const starting=useRef(false);
   const complete=!lab.practice && lab.boxes.some(b=>b.id===2 && b.support===1);
   useEffect(()=>{
@@ -84,7 +80,7 @@ export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>v
         <PanelText text={name || 'QUAL É O SEU NOME?'} width={1.25} height={.14} position={[0,.10,.006]}/>
         <TouchButton text={fallback?'FECHAR TECLADO 3D':'USAR TECLADO 3D'} position={[0,-.11,.04]} width={1.05} height={.12} onPress={()=>{if(fallback)setFallback(false);else editName();}}/>
       </group>}
-      {finished && !saved && fallback && createPortal(<group position={keyboardPose.position} rotation={[0,keyboardPose.yaw,0]}><group rotation={[-.4,0,0]} scale={.65}><group position={[-.3,0,0]}>
+      {finished && !saved && fallback && createPortal(<group position={keyboardPosition} rotation={[0,0,0]}><group rotation={[-.4,0,0]} scale={.65}><group>
         <mesh position={[0,-.05,-.07]}><boxGeometry args={[1.42,.93,.14]}/><meshStandardMaterial color="#203947"/></mesh>
         <PanelText text={(name || 'SEU NOME') + '  |'} width={1.3} height={.12} position={[0,.48,.04]}/>
         {['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'].map((row,r)=>row.split('').map((char,i)=><TouchButton key={char} text={char} position={[(i-(row.length-1)/2)*.135,.28-r*.18,.025]} width={.113} height={.14} onPress={()=>setName(n=>(n+char).slice(0,18))}/>))}
