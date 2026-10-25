@@ -51,14 +51,14 @@ export function Label({ text, position, action, width = 1.1, height = 0.045, col
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 128;
     const ctx = canvas.getContext('2d')!; ctx.fillStyle = color; ctx.fillRect(0, 0, 1024, 128);
-    ctx.fillStyle = '#ffffff'; ctx.font = '38px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 58px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const lines: string[] = []; let line = '';
     for (const word of text.split(' ')) {
       const next = line ? line + ' ' + word : word;
       if (ctx.measureText(next).width > 980 && line) { lines.push(line); line = word; } else line = next;
     }
     lines.push(line);
-    const size = Math.min(38, 112 / lines.length); ctx.font = size + 'px sans-serif';
+    const size = Math.min(58, 112 / lines.length); ctx.font = size + 'px sans-serif';
     lines.forEach((value, i) => ctx.fillText(value, 512, 64 + (i - (lines.length - 1) / 2) * size, 990));
     return new CanvasTexture(canvas);
   }, [text, color]);
@@ -135,7 +135,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
     { label: 'Desempilhar', run: () => dispatch({ type: 'unstack' }) },
     { label: 'Girar 90°', run: () => dispatch({ type: 'move', pose: { ...selected.pose, yaw: selected.pose.yaw + Math.PI / 2 } }) },
   ];
-  const vrActions = activeModule === 'vr' ? [] : [
+  const vrActions = activeModule === 'vr' ? [{label:'Montar duas caixas',run:()=>dispatch({type:'prepare-test'})}] : [
     ...(activeModule === 'road' ? [
       { label: flight ? 'Modo caminhada' : 'Modo voo', run: () => { setFlight(!flight); visit('entry'); } },
       { label: 'Entrar no equipamento', run: () => { setFlight(false); visit('inside'); } },
@@ -174,16 +174,16 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
         {assembly && lab.boxes.map(b => <Crate key={b.id} box={b} selected={b.id === selected.id} tool={module === 'desktop' ? tool : 'assemble'} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onPose={onPose} interaction={{ enabled: module === 'desktop' && tool === 'assemble', busy: setDragging, hint: setHint }} />)}
         <XRInteraction exploration={{ key: `${activeModule}:${data?.vehicle?.kind ?? ''}`, mode: flight ? 'fly' : 'walk', vehicle: activeModule === 'road' ? data?.vehicle : undefined, view: viewpoint.view, revision: viewpoint.revision }} lab={lab} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onRenderer={setRenderer} onPresenting={setPresenting} onHint={setHint}>
           <mesh position={[0, 0, -0.012]}><boxGeometry args={[0.46, 0.80, 0.018]} /><meshStandardMaterial color="#203541" roughness={0.8} /></mesh>
-          {(['product', 'road', 'vr'] as const).map((name, i) => <Label key={name} text={['Produto', 'Estufagem', 'Montagem MB6'][i]} color={activeModule === name ? '#087c70' : '#183747'} position={[-.145 + i * .145, .36, .002]} width={.14} height={.055} action={() => navigate(name)} />)}
+          {(['product', 'road', 'vr'] as const).map((name, i) => <Label key={name} text={['Produto', 'Estufagem', 'Montagem MB6'][i]} color={activeModule === name ? '#087c70' : '#183747'} position={[-.145 + i * .145, .36, .002]} width={.14} height={.075} action={() => navigate(name)} />)}
           <Label text={activeModule === 'vr' ? `MB6 · Caixa ${selected.id} · ${selected.walls.filter(Boolean).length}/4 paredes · ${selected.locks.filter(Boolean).length}/4 travas` : activeModule === 'road' ? `ESTUFAGEM · ${flight ? 'VOO' : 'CAMINHADA'}` : 'PRODUTO NO GOODPACK'} position={[0, 0.27, 0.002]} width={0.42} />
           <Label text={activeModule === 'vr' ? ['MONTAGEM', 'TRAVAS E CAIXAS', 'POSIÇÃO E ENCAIXE'][safePage] : 'COMANDOS'} position={[0, 0.215, 0.002]} width={0.42} />
-          {vrActions.slice(safePage * 6, safePage * 6 + 6).map((action, i) => <Label key={action.label} text={action.label} position={[-0.108 + (i % 2) * 0.216, 0.15 - Math.floor(i / 2) * 0.06, 0.002]} action={action.run} width={0.2} />)}
+          {vrActions.slice(safePage * 6, safePage * 6 + 6).map((action, i) => <Label key={action.label} text={action.label} position={[activeModule === 'vr' ? 0 : -0.108 + (i % 2) * 0.216, 0.14 - Math.floor(i / 2) * 0.09, 0.002]} action={action.run} width={activeModule === 'vr' ? .42 : .2} height={.075} />)}
           {activeModule !== 'vr' && <><Label text="‹ Página" position={[-0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + vrPages - 1) % vrPages)} />
           <Label text={`Página ${safePage + 1}/${vrPages} ›`} position={[0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + 1) % vrPages)} />
           </>}
           <Label text={activeModule === 'road' ? (flight ? 'Direito: deslocar. Esquerdo: subir/descer e virar. Grip esquerdo: prancheta.' : 'Direito: caminhar. Esquerdo: virar. Área externa: 2 m. Grip esquerdo: prancheta.') : hint} position={[0, -0.16, 0.002]} width={0.42} height={0.06} />
           <Label text={activeModule === 'vr' ? lab.message : data?.status ?? 'Carregando cenário'} position={[0, -0.22, 0.002]} width={0.42} />
-          <Label text="Sair do VR" position={[0.108, -0.28, 0.002]} width={0.2} action={() => void renderer?.xr.getSession()?.end()} />
+          <Label text="Sair do VR" position={[0, -0.31, 0.002]} width={0.42} height={.09} action={() => void renderer?.xr.getSession()?.end()} />
         </XRInteraction>
       </Canvas>
     </section>
