@@ -49,7 +49,8 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
     const projectedHands = [controllerHand(), controllerHand()];
     projectedHands.forEach(hand => { hand.root.visible=false; scene.add(hand.root); });
     const hoveredLevers = new Set<Object3D>();
-    const clearHover = () => { hoveredLevers.forEach(object => { object.userData.xrHovered = false; }); hoveredLevers.clear(); };
+    const hoveredBoxes = new Set<Object3D>();
+    const clearHover = () => { hoveredBoxes.forEach(o=>{o.userData.xrGrabCorners=[];}); hoveredBoxes.clear(); hoveredLevers.forEach(object => { object.userData.xrHovered = false; }); hoveredLevers.clear(); };
     const restoreWall = (h: Hand) => { if (h.target?.wall) h.target.object.userData.xrHeld = false; };
     const actions = () => { const result: Object3D[] = []; board.current?.traverse(o => { if (typeof o.userData.activate === 'function') result.push(o); }); return result; };
     const hint = (text: string) => { if (text !== message) { message = text; latest.current.onHint(text); } };
@@ -312,6 +313,24 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           beams[i].beam.material.color.set('#168bff');
         }
       });
+      if (!menu) {
+        const candidates = hands.map((h,i)=>{
+          if (!h.tracked) return null;
+          if (grab) return {object:grab.object, corner:boxGrabCorner(grab.anchors[i])};
+          const t=h.down?h.target:aim(i);
+          const b=latest.current.lab.boxes.find(b=>b.id===t?.boxId);
+          return t?.boxObject && !t.panel && b && canGrabBox(latest.current.lab,b)
+            ? {object:t.boxObject,corner:boxGrabCorner(t.boxObject.worldToLocal(t.hit.clone()))} : null;
+        });
+        candidates.forEach((c,i)=>{
+          if (!c || c.corner===null) return;
+          const other=candidates[1-i];
+          if (other && (other.object!==c.object || other.corner===c.corner)) return;
+          if (!hoveredBoxes.has(c.object)) {c.object.userData.xrGrabCorners=[];hoveredBoxes.add(c.object);}
+          c.object.userData.xrGrabCorners.push(c.corner);
+          beams[i].beam.material.color.set('#168bff');
+        });
+      }
       if (grab) {
         const held = grab, b = latest.current.lab.boxes.find(b => b.id === held.id);
         if (!b || !canGrabBox(latest.current.lab, b)) { clear(true); return; }

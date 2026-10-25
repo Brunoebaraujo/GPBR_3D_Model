@@ -78,6 +78,12 @@ export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>v
         <mesh position={[0,-.05,-.07]}><boxGeometry args={[1.42,.93,.14]}/><meshStandardMaterial color="#203947"/></mesh>
         <PanelText text={(name || 'SEU NOME') + '  |'} width={1.3} height={.12} position={[0,.48,.04]}/>
         {['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'].map((row,r)=>row.split('').map((char,i)=><TouchButton key={char} text={char} position={[(i-(row.length-1)/2)*.135,.28-r*.18,.025]} width={.113} height={.14} onPress={()=>setName(n=>(n+char).slice(0,18))}/>))}
+        <group position={[1.03,0,0]}>
+          <mesh position={[0,-.02,-.07]}><boxGeometry args={[.55,.93,.14]}/><meshStandardMaterial color="#203947"/></mesh>
+          <PanelText text="NÚMEROS" width={.48} height={.09} position={[0,.41,.025]}/>
+          {['789','456','123'].map((row,r)=>row.split('').map((char,i)=><TouchButton key={char} text={char} position={[(i-1)*.17,.25-r*.18,.025]} width={.13} height={.14} onPress={()=>setName(n=>(n+char).slice(0,18))}/>))}
+          <TouchButton text="0" position={[0,-.29,.025]} width={.47} height={.13} onPress={()=>setName(n=>(n+'0').slice(0,18))}/>
+        </group>
         <TouchButton text="ESPAÇO" position={[-.46,-.29,.025]} width={.39} height={.13} onPress={()=>setName(n=>(n+' ').slice(0,18))}/>
         <TouchButton text="APAGAR" position={[0,-.29,.025]} width={.39} height={.13} onPress={()=>setName(n=>n.slice(0,-1))}/>
         <TouchButton text="SALVAR" position={[.46,-.29,.025]} width={.39} height={.13} disabled={!name.trim()} onPress={save}/>

@@ -183,6 +183,17 @@ function Lid({ box, act, interaction }: { box: Assembly; act: (a: Action) => voi
   </group>;
 }
 
+function CornerFeedback() {
+  const root=useRef<Group>(null);
+  useFrame(()=>{
+    const corners: number[] = root.current?.parent?.userData.xrGrabCorners ?? [];
+    root.current?.children.forEach((child,i)=>{child.visible=corners.includes(i);});
+  });
+  return <group ref={root}>{[0,1,2,3].map(i=><group key={i} visible={false} position={[(i%2 ? 1 : -1)*(MB6.w/2-.025),(MB6.h+MB6.foot)/2,(i>=2 ? 1 : -1)*(MB6.d/2-.025)]}>
+    <mesh raycast={()=>{}}><boxGeometry args={[.045,MB6.h-MB6.foot,.045]}/><meshBasicMaterial color="#168bff" transparent opacity={.85} depthWrite={false} toneMapped={false}/></mesh>
+  </group>)}</group>;
+}
+
 export function Crate({ box, selected, tool, dispatch, onPose, interaction }: { box: Assembly; selected: boolean; tool: MouseTool; dispatch: (a: Action) => void; onPose: (id: number, pose: Pose) => Pose; interaction: Interaction }) {
   const previousSupport = useRef(box.support);
   useEffect(() => {
@@ -214,6 +225,7 @@ export function Crate({ box, selected, tool, dispatch, onPose, interaction }: { 
 
       </group>))}
       {box.walls.map((_, i) => <Wall key={i} index={i} box={box} act={act} interaction={interaction} />)}
+      <CornerFeedback />
       <Lid box={box} act={act} interaction={interaction} />
     </group>
     {selected && group && tool !== 'assemble' && <TransformControls object={group} mode={tool} showX={tool !== 'rotate'} showY showZ={tool !== 'rotate'} space="world" translationSnap={0.01} rotationSnap={Math.PI / 36} onMouseDown={() => interaction.busy(true)} onMouseUp={commit} />}
