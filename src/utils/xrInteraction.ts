@@ -10,6 +10,10 @@ export function navigationInput(pads: { left: XRPad | null; right: XRPad | null 
   const x = axis(pads.right, 2), leftZ = axis(pads.left, 3), rightZ = axis(pads.right, 3), z = Math.abs(leftZ) > Math.abs(rightZ) ? leftZ : rightZ, length = Math.max(1, Math.hypot(x, z));
   return { turn: axis(pads.left, 2) * time * 1.1, strafe: x / length * time * 1.2, forward: -z / length * time * 1.2 || 0 };
 }
+// A held wall permits only left-stick forward/backward assistance.
+export function wallNavigationInput(left: XRPad | null, dt: number) {
+  return {turn:0,strafe:0,forward:navigationInput({left,right:null},dt).forward};
+}
 export const canGrabBox = (lab: Lab, box: Assembly) => ready(box) && box.support === null && !lab.boxes.some(other => (other.support === box.id || other.restingOn === box.id));
 export const canOperateLever = (lab: Lab, box: Assembly, index: number) =>
   Number.isInteger(index) && index >= 0 && index < 4 && !box.lid && box.support === null && !box.restingOn &&

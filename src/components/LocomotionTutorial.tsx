@@ -10,17 +10,24 @@ function TutorialButton({text,x,run}:{text:string;x:number;run:()=>void}){
   </group>;
 }
 export function LocomotionTutorial({step,onStep}:{step:number;onStep:(step:number)=>void}){
-  const positioned=useRef(false);
   const root=useRef<Group>(null),{gl,camera}=useThree();
-  const vectors=useRef({eye:new Vector3(),direction:new Vector3(),rotation:new Quaternion(),target:new Vector3()});
-  useFrame((_,dt)=>{
+  const vectors=useRef({eye:new Vector3(),direction:new Vector3(),rotation:new Quaternion(),parentRotation:new Quaternion(),target:new Vector3()});
+  useFrame((_,_dt,frame)=>{
     if(!root.current)return;
-    const v=vectors.current,view=gl.xr.isPresenting?gl.xr.getCamera():camera;
-    view.getWorldPosition(v.eye);view.getWorldQuaternion(v.rotation);
-    v.direction.set(0,0,-1).applyQuaternion(v.rotation);v.direction.y=0;v.direction.normalize();
-    v.target.copy(v.eye).addScaledVector(v.direction,1.55);v.target.y-=.12;
-    if(!positioned.current){root.current.position.copy(v.target);positioned.current=true;}
-    else root.current.position.lerp(v.target,Math.min(1,dt*10));
+    const v=vectors.current,space=gl.xr.getReferenceSpace();
+    const pose=frame && space ? frame.getViewerPose(space) : null;
+    if(gl.xr.isPresenting && !pose){root.current.visible=false;return;}
+    if(pose){
+      // The detached XR camera loses its rig transform when its world matrix is recomputed.
+      v.eye.copy(pose.transform.position);v.rotation.copy(pose.transform.orientation);
+      if(camera.parent){camera.parent.localToWorld(v.eye);v.rotation.premultiply(camera.parent.getWorldQuaternion(v.parentRotation));}
+    } else {camera.getWorldPosition(v.eye);camera.getWorldQuaternion(v.rotation);}
+    v.direction.set(0,0,-1).applyQuaternion(v.rotation);v.direction.y=0;
+    if(v.direction.lengthSq()<1e-8)v.direction.set(0,0,-1);
+    v.direction.normalize();
+    // Include the vertical offset in the two-metre eye-to-panel distance.
+    v.target.copy(v.eye).addScaledVector(v.direction,Math.sqrt(4-.12*.12));v.target.y-=.12;
+    root.current.position.copy(v.target);
     root.current.rotation.set(0,Math.atan2(-v.direction.x,-v.direction.z),0);
     const session=gl.xr.getSession();
     root.current.visible=!session || (session.visibilityState==='visible' && !Array.from(session.inputSources).some(s=>s.handedness==='left' && s.gamepad?.buttons[4]?.pressed));

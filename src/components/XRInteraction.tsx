@@ -7,7 +7,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { BoxGeometry, SphereGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
 import { wallGrabPoint, supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
-import { boxGrabCorner, canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, navigateRig, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
+import { boxGrabCorner, canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, wallNavigationInput, navigateRig, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
 type Props = { onTutorialSample?: (sample: TutorialSample) => void; exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
 type LeverTarget = { boxId: number; index: number; direction: number };
@@ -171,7 +171,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         h.anchor.copy(parent.worldToLocal(point(i)));
         const grip = wallGrabPoint(target.wall.index); h.radius = Math.hypot(grip.y, grip.z);
         target.object.userData.xrHeld = true; target.object.rotation.x = h.wallStart;
-        hint('Parede segura: mantenha o gatilho e puxe até a posição final. Soltar antes devolve a parede.'); return;
+        hint('Parede segura: mantenha a pega e puxe. Use o analógico esquerdo para avançar/recuar enquanto segura.'); return;
       }
       // Never remove a completed box's lid when an attempted grab is blocked.
       if (b?.support !== null && b?.support !== undefined) { hint('Use Desempilhar no painel antes de levantar a caixa.'); return; }
@@ -255,10 +255,12 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const forward = new Vector3(0,0,-1).applyQuaternion(new Quaternion(orientation.x,orientation.y,orientation.z,orientation.w));
       const headYaw = Math.atan2(-forward.x,-forward.z);
       const beforeX=rig.position.x,beforeZ=rig.position.z,beforeYaw=rig.rotation.y;
-      if (!menu && !hands.some(h => h.down || h.source?.gamepad?.buttons[0]?.pressed)) {
-        const nav = navigationInput(pads,dt);
+      const heldWall = !grab && hands.some(h=>h.tracked && h.down && h.target?.wall && !h.target.lever && h.target.object.userData.xrHeld)
+        && !hands.some(h=>h.down && h.target && !h.target.object.userData.xrHeld);
+      if (!menu && (heldWall || !hands.some(h => h.down || h.source?.gamepad?.buttons[0]?.pressed))) {
+        const nav = heldWall ? wallNavigationInput(pads.left,dt) : navigationInput(pads,dt);
         const config = latest.current.exploration;
-        if (config?.vehicle && config.mode === 'fly') {
+        if (!heldWall && config?.vehicle && config.mode === 'fly') {
           nav.forward = navigationInput({ left: null, right: pads.right }, dt).forward;
           const lift = pads.left?.axes[3] ?? 0;
           if (Math.abs(lift) > .18) rig.position.y -= lift * Math.min(dt, .05) * 1.5;

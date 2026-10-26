@@ -56,6 +56,16 @@ try {
     const st=tutorialSample(tutorialState(0),{...sample,headYaw:Math.PI-.01});
     assert.equal(tutorialSample(st,{...sample,headYaw:-Math.PI+.01}).step,0);
   });
+  const {wallNavigationInput}=await load('utils/xrInteraction.js');
+  test('Held-wall assistance uses only left forward/backward with deadzone and bounded speed',()=>{
+    const pad={mapping:'xr-standard',buttons:[],axes:[0,0,1,-1]};
+    assert.deepEqual(wallNavigationInput(pad,.05),{turn:0,strafe:0,forward:.06});
+    assert.deepEqual(wallNavigationInput({...pad,axes:[0,0,-1,1]},.05),{turn:0,strafe:0,forward:-.06});
+    assert.deepEqual(wallNavigationInput(null,.05),{turn:0,strafe:0,forward:0});
+    assert.equal(wallNavigationInput({...pad,mapping:''},.05).forward,0);
+    assert.equal(wallNavigationInput({...pad,axes:[0,0,1,.1]},.05).forward,0);
+    assert.equal(wallNavigationInput(pad,10).forward,.06);
+  });
   const { boxGrabCorner } = await load('utils/xrInteraction.js');
   test('Box lifting accepts the full vertical corners with stable IDs and rejects wall centers', () => {
     let baseline;
