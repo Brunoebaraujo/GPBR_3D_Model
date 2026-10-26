@@ -58,7 +58,8 @@ try {
     for(const left of [true,false]) {
       assert.equal(Math.abs(handPose(pad,[],left).roll),Math.PI/2);
       assert.equal(handPose(pad,[],left,'wall').roll,0);
-      assert.equal(handPose(pad,[],left,'box').roll,0);
+      assert.equal(handPose(pad,[],left,'box').roll,(left?1:-1)*Math.PI/2);
+      assert.equal(handPose(pad,[],left,'lever').roll,(left?1:-1)*Math.PI/2);
     }
     assert.equal(handPose(pad,['oculus-touch-v3'],true).thumb,0);
     buttons[4].touched=true;

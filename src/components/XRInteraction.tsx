@@ -292,8 +292,8 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         if(!handle)return;
         hand.root.visible=true;models[i].root.visible=false;
         hand.root.position.copy(handle.localToWorld(new Vector3(-.012*target.lever.direction,-.065,.002)));
-        hand.root.quaternion.copy(handle.getWorldQuaternion(new Quaternion()));
-        hand.update(handPose(null,[],h.source?.handedness==='left','wall'),h.source?.handedness==='left',dt);
+        hand.root.quaternion.copy(target.object.getWorldQuaternion(new Quaternion()));
+        hand.update(handPose(null,[],h.source?.handedness==='left','lever'),h.source?.handedness==='left',dt);
       });
       // Only actual tracked fingertips/glove tips can press pedestal buttons; rays never do.
       const touches: Vector3[]=[];
@@ -372,7 +372,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           const anchor=held.anchors[i];
           hand.root.visible=hands[i].tracked;models[i].root.visible=false;
           hand.root.position.copy(held.object.localToWorld(anchor.clone()));
-          // Fingers face the crate; the grasp pose keeps the palm horizontal.
+          // Fingers face the crate; the grasp pose keeps the thumb upward.
           hand.root.quaternion.copy(held.object.getWorldQuaternion(new Quaternion()))
             .multiply(new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.atan2(anchor.x,anchor.z)));
           hand.update(handPose(null,[],hands[i].source?.handedness==='left','box'),hands[i].source?.handedness==='left',dt);
