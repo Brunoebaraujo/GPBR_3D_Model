@@ -1,3 +1,4 @@
+import { handPose } from '../utils/handPose';
 import { touchButton, type TouchState } from '../utils/xrTouch';
 import { constrainCrates, explorationStart, constrainExploration, type Exploration } from '../utils/xrNavigation';
 import { controllerHand } from './controllerHand';
@@ -216,7 +217,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       hands.forEach((h, i) => {
         h.tracked = !!h.source?.gripSpace && !!frame.getPose(h.source.gripSpace, space) && !!frame.getPose(h.source.targetRaySpace, space);
         if (!h.tracked && h.down) { clear(true); hint('Rastreamento perdido: agarre cancelado. A caixa voltou à origem.'); }
-        models[i].root.visible=h.tracked; models[i].update(h.source?.gamepad?.buttons[0]?.value ?? (h.down?1:0),h.source?.handedness==='left');
+        models[i].root.visible=h.tracked; models[i].update(handPose(h.source?.gamepad,h.source?.profiles ?? [],h.source?.handedness==='left','free',h.down?1:0),h.source?.handedness==='left',dt);
         beams[i].beam.visible = h.tracked;
         beams[i].beam.material.color.set(h.down ? '#ffcd5c' : '#42e8cc');
         const distance = grab?.distances[i] ?? 4;
@@ -275,7 +276,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           const grip = wallGrabPoint(target.wall.index);
           hand.root.position.copy(target.object.localToWorld(new Vector3(grip.x,grip.y,grip.z)));
           hand.root.quaternion.copy(target.object.getWorldQuaternion(new Quaternion()));
-          hand.update(1,hands[i].source?.handedness==='left');
+          hand.update(handPose(null,[],hands[i].source?.handedness==='left','wall'),hands[i].source?.handedness==='left',dt);
         }
       });
       // Only actual tracked fingertips/glove tips can press pedestal buttons; rays never do.
@@ -355,10 +356,10 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           const anchor=held.anchors[i];
           hand.root.visible=hands[i].tracked;models[i].root.visible=false;
           hand.root.position.copy(held.object.localToWorld(anchor.clone()));
-          // Fingers face the crate; local up keeps the thumbs vertical.
+          // Fingers face the crate; the grasp pose keeps the palm horizontal.
           hand.root.quaternion.copy(held.object.getWorldQuaternion(new Quaternion()))
             .multiply(new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.atan2(anchor.x,anchor.z)));
-          hand.update(1,hands[i].source?.handedness==='left');
+          hand.update(handPose(null,[],hands[i].source?.handedness==='left','box'),hands[i].source?.handedness==='left',dt);
         });
       } else hands.forEach((h, i) => {
         const target = h.target;

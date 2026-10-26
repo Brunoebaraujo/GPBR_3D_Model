@@ -51,6 +51,30 @@ try {
     assert.ok(lab.boxes[1].pose.x-lab.boxes[0].pose.x>assemblyTest.MB6.w);
     assert.ok(!assemblyTest.reduceLab(lab,{type:'reset'}).practice);
   });
+  const {handPose}=await load('utils/handPose.js');
+  test('Hands separate horizontal grasp from neutral roll and react to capacitive contact',()=>{
+    const buttons=Array.from({length:6},()=>({value:0,pressed:false,touched:false}));
+    const pad={mapping:'xr-standard',buttons};
+    for(const left of [true,false]) {
+      assert.equal(Math.abs(handPose(pad,[],left).roll),Math.PI/2);
+      assert.equal(handPose(pad,[],left,'wall').roll,0);
+      assert.equal(handPose(pad,[],left,'box').roll,0);
+    }
+    assert.equal(handPose(pad,['oculus-touch-v3'],true).thumb,0);
+    buttons[4].touched=true;
+    assert.ok(handPose(pad,['oculus-touch-v3'],true).thumb>0);
+    assert.equal(handPose(pad,['unknown'],true).thumb,0);
+    buttons[4].touched=false;buttons[3].touched=true;
+    assert.ok(handPose(pad,[],true).thumb>0);
+    buttons[0].touched=true;
+    assert.ok(handPose(pad,[],true).index>0);
+    buttons[1].value=.7;
+    assert.equal(handPose(pad,[],true).fingers,.7);
+    buttons[0].value=1;
+    assert.equal(handPose(pad,[],true).index,1);
+    assert.equal(handPose(null,[],true).thumb,0);
+    assert.equal(handPose({...pad,mapping:''},[],true).thumb,0);
+  });
   test('Grid capacity, payload limit, and generated placement are consistent', () => {
     const result = calculateGridPacking(MB5_CONTAINER, product);
     assert.equal(result.totalQuantity, 210); assert.equal(result.payloadLimitedQuantity, 165);
