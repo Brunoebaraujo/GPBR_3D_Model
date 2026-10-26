@@ -1,4 +1,4 @@
-import { handPose } from '../utils/handPose';
+import { handPose, doorGripHeld, clipboardHeld } from '../utils/handPose';
 import { touchButton, type TouchState } from '../utils/xrTouch';
 import { constrainCrates, explorationStart, constrainExploration, type Exploration } from '../utils/xrNavigation';
 import { controllerHand } from './controllerHand';
@@ -6,12 +6,12 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { BoxGeometry, SphereGeometry, Group, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3, WebGLRenderer, Euler } from 'three';
 import { wallGrabPoint, supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
-import { boxGrabCorner, canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, navigateRig, gripHeld, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
+import { boxGrabCorner, canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, navigateRig, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
 type Props = { exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
 type LeverTarget = { boxId: number; index: number; direction: number };
 type Target = { object: Object3D; boxId?: number; lever?: LeverTarget; activate?: () => void; panel: boolean; wall?: { boxId: number; index: number }; boxObject?: Object3D; hit: Vector3 };
-type Hand = { source: XRInputSource | null; down: boolean; target: Target | null; anchor: Vector3; phase: LeverPhase; slideDirection: number; tracked: boolean; wallStart: number; radius: number };
+type Hand = { source: XRInputSource | null; down: boolean; target: Target | null; anchor: Vector3; phase: LeverPhase; slideDirection: number; tracked: boolean; wallStart: number; radius: number; pendingWall: boolean };
 type Grab = { id: number; object: Object3D; origin: Pose; start: [Point3, Point3]; candidate: Pose; distances: [number, number]; anchors: [Vector3, Vector3] };
 
 // The viewer and controllers share a rig; the clipboard follows the left grip while held.
@@ -71,9 +71,9 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         const box = latest.current.lab.boxes.find(b => b.id === held.id);
         applyPose(held.object, box?.pose ?? held.origin);
       }
-      hands.forEach(h => { restoreWall(h); h.down = false; h.target = null; });
+      hands.forEach(h => { restoreWall(h); h.down = false; h.target = null; h.pendingWall=false; });
     };
-    const hands: Hand[] = [0, 1].map(() => ({ source: null, down: false, target: null, anchor: new Vector3(), phase: 'lift', slideDirection: 1, tracked: false, wallStart: 0, radius: .5 }));
+    const hands: Hand[] = [0, 1].map(() => ({ source: null, down: false, target: null, anchor: new Vector3(), phase: 'lift', slideDirection: 1, tracked: false, wallStart: 0, radius: .5, pendingWall:false }));
     feedback.current = () => {
       if (!active) return;
       if (audio?.state === 'running') {
@@ -122,7 +122,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const h = hands[i]; h.source = source;
       if (!active || !h.tracked || h.down || grab || (source.handedness !== 'left' && source.handedness !== 'right')) return;
       try { audio ??= new AudioContext(); void audio.resume().catch(() => undefined); } catch { /* audio is optional */ }
-      h.down = true;
+      h.pendingWall=false; h.down = true;
       if (board.current?.visible && source.handedness === 'right' && menuIndex >= 0) { actions()[menuIndex]?.userData.activate(); return; }
       const target = aim(i); h.target = target;
       if (!target) return;
@@ -159,6 +159,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         return;
       }
       if (target.wall && b) {
+        if (!doorGripHeld(source.gamepad)) {h.pendingWall=true;h.down=false;h.target=null;hint('Feche a mão: segure gatilho e grip lateral, tocando A/B ou X/Y.');return;}
         if (hands.some((other,j) => j !== i && other.down && other.target?.wall?.boxId === b.id && other.target?.wall?.index === target.wall!.index)) { h.target = null; return; }
         const state = reduceLab(latest.current.lab, { type: 'select', id: b.id });
         const probe = reduceLab(state, { type: 'wall', index: target.wall.index });
@@ -183,7 +184,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const connected = (event: { data: XRInputSource }) => { hands[i].source = event.data; };
       const disconnected = () => { clear(true); hands[i].source = null; hands[i].tracked = false; };
       const down = (event: { data: XRInputSource }) => begin(i, event.data);
-      const up = () => { if (grab) clear(false); restoreWall(hands[i]); hands[i].down = false; hands[i].target = null; };
+      const up = () => { if (grab) clear(false); restoreWall(hands[i]); hands[i].down = false; hands[i].target = null; hands[i].pendingWall=false; };
       controller.addEventListener('connected', connected); controller.addEventListener('disconnected', disconnected);
       controller.addEventListener('selectstart', down); controller.addEventListener('selectend', up);
       return { beam, marker, connected, disconnected, down, up };
@@ -195,7 +196,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       if (camera instanceof PerspectiveCamera) saved.fov = camera.fov;
       rig.add(camera); camera.position.set(0, 0, 0); camera.quaternion.identity();
       gl.xr.getSession()?.addEventListener('visibilitychange', visibility); onPresenting(true);
-      hint('Esquerda: virar e avançar/recuar. Segure o grip esquerdo para abrir a prancheta.');
+      hint('Esquerda: virar e avançar/recuar. Segure X para abrir a prancheta.');
     };
     const end = () => {
       projectedHands.forEach(hand=>{hand.root.visible=false;});
@@ -217,6 +218,11 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       hands.forEach((h, i) => {
         h.tracked = !!h.source?.gripSpace && !!frame.getPose(h.source.gripSpace, space) && !!frame.getPose(h.source.targetRaySpace, space);
         if (!h.tracked && h.down) { clear(true); hint('Rastreamento perdido: agarre cancelado. A caixa voltou à origem.'); }
+        if(h.pendingWall && h.tracked && h.source && doorGripHeld(h.source.gamepad)) begin(i,h.source);
+        if(h.down && h.target?.wall && !h.target.lever && h.target.object.userData.xrHeld && !doorGripHeld(h.source?.gamepad)) {
+          restoreWall(h);h.target=null;h.down=false;h.pendingWall=false;
+          hint('Porta solta: mantenha gatilho, grip e toque no botão para segurar.');
+        }
         models[i].root.visible=h.tracked; models[i].update(handPose(h.source?.gamepad,h.source?.profiles ?? [],h.source?.handedness==='left','free',h.down?1:0),h.source?.handedness==='left',dt);
         beams[i].beam.visible = h.tracked;
         beams[i].beam.material.color.set(h.down ? '#ffcd5c' : '#42e8cc');
@@ -227,7 +233,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const pad = (side: XRHandedness) => hands.find(h => h.tracked && h.source?.handedness === side)?.source?.gamepad ?? null;
       const pads = { left: pad('left'), right: pad('right') };
       const left = hands.findIndex(h => h.tracked && h.source?.handedness === 'left');
-      const menu = left >= 0 && gripHeld(pads.left) && !grab && !hands.some(h => h.down && h.target?.boxId !== undefined);
+      const menu = left >= 0 && clipboardHeld(pads.left) && !grab && !hands.some(h => h.down && h.target?.boxId !== undefined);
       if (board.current) {
         board.current.visible = menu;
         if (menu) {
@@ -278,6 +284,16 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           hand.root.quaternion.copy(target.object.getWorldQuaternion(new Quaternion()));
           hand.update(handPose(null,[],hands[i].source?.handedness==='left','wall'),hands[i].source?.handedness==='left',dt);
         }
+      });
+      if(!grab) projectedHands.forEach((hand,i)=>{
+        const h=hands[i],target=h.target;
+        if(!h.tracked || !h.down || !target?.lever)return;
+        const handle=target.object.getObjectByName('latch-handle');
+        if(!handle)return;
+        hand.root.visible=true;models[i].root.visible=false;
+        hand.root.position.copy(handle.localToWorld(new Vector3(-.012*target.lever.direction,-.065,.002)));
+        hand.root.quaternion.copy(handle.getWorldQuaternion(new Quaternion()));
+        hand.update(handPose(null,[],h.source?.handedness==='left','wall'),h.source?.handedness==='left',dt);
       });
       // Only actual tracked fingertips/glove tips can press pedestal buttons; rays never do.
       const touches: Vector3[]=[];
