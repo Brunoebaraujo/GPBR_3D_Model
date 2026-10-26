@@ -291,7 +291,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         const handle=target.object.getObjectByName('latch-handle');
         if(!handle)return;
         hand.root.visible=true;models[i].root.visible=false;
-        hand.root.position.copy(handle.localToWorld(new Vector3(-.012*target.lever.direction,-.065,.002)));
+        hand.root.position.copy(handle.localToWorld(new Vector3(-.012*target.lever.direction + .025,-.065,.002)));
         hand.root.quaternion.copy(target.object.getWorldQuaternion(new Quaternion()));
         hand.update(handPose(null,[],h.source?.handedness==='left','lever'),h.source?.handedness==='left',dt);
       });
