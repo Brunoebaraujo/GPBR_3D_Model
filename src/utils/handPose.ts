@@ -1,4 +1,4 @@
-export type HandMode = 'free' | 'wall' | 'box';
+export type HandMode = 'free' | 'wall' | 'box' | 'lever';
 type Button = { value: number; pressed: boolean; touched?: boolean };
 export type HandPad = { mapping: string; buttons: readonly Button[] };
 export type HandPose = { index: number; fingers: number; thumb: number; roll: number };
@@ -8,7 +8,7 @@ const clamp = (n: number) => Number.isFinite(n) ? Math.max(0,Math.min(1,n)) : 0;
 export function handPose(pad: HandPad | null | undefined, profiles: readonly string[], left: boolean, mode: HandMode = 'free', fallback = 0): HandPose {
   const sign=left?1:-1;
   if(mode==='wall') return {index:.86,fingers:.92,thumb:.65,roll:0};
-  if(mode==='box') return {index:.9,fingers:.95,thumb:.8,roll:0};
+  if(mode==='box' || mode==='lever') return {index:.9,fingers:.95,thumb:.8,roll:sign*Math.PI/2};
   const standard=pad?.mapping==='xr-standard';
   const trigger=standard?pad.buttons[0]:undefined, grip=standard?pad.buttons[1]:undefined;
   const index=clamp(Math.max(trigger?.value ?? fallback,trigger?.pressed?1:0,trigger?.touched? .18:0));
