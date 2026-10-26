@@ -1,3 +1,6 @@
+import { LocomotionTutorial } from './LocomotionTutorial';
+import { useLocomotionTutorial } from './useLocomotionTutorial';
+import { TUTORIAL_STEPS } from '../utils/locomotionTutorial';
 import { useVRModule, type StudioModule } from './VRBridge';
 import type { Exploration } from '../utils/xrNavigation';
 import { useEffect, useMemo, useReducer, useState } from 'react';
@@ -75,11 +78,12 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
       window.removeEventListener('keydown', unlockAssemblyAudio);
     };
   }, []);
+  const {step: tutorialStep, go: tutorialGo, offer: tutorialOffer, report: tutorialReport} = useLocomotionTutorial();
   const data = useVRModule(activeModule);
   const [flight, setFlight] = useState(false);
   const [viewpoint, setViewpoint] = useState<{ view: Exploration['view']; revision: number }>({ view: 'entry', revision: 0 });
   const visit = (view: Exploration['view']) => setViewpoint(current => ({ view, revision: current.revision + 1 }));
-  const navigate = (next: StudioModule) => { setPage(0); setFlight(false); visit('entry'); onNavigate(next); };
+  const navigate = (next: StudioModule) => { tutorialGo(-2); setPage(0); setFlight(false); visit('entry'); onNavigate(next); };
 
   const [lab, dispatch] = useReducer(reduceLab, undefined, initialLab);
   const [module, setModule] = useState<'desktop' | 'vr'>('desktop');
@@ -91,6 +95,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
   const [view, setView] = useState<ViewRequest | null>(null);
   const [renderer, setRenderer] = useState<WebGLRenderer | null>(null);
   const [presenting, setPresenting] = useState(false);
+  useEffect(() => { if (presenting && activeModule === 'vr') tutorialOffer(); }, [presenting, activeModule, tutorialOffer]);
   const [xrStatus, setXRStatus] = useState('Verificando headset…');
   const [supported, setSupported] = useState(false);
   const [pending, setPending] = useState(false);
@@ -135,7 +140,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
     { label: 'Desempilhar', run: () => dispatch({ type: 'unstack' }) },
     { label: 'Girar 90°', run: () => dispatch({ type: 'move', pose: { ...selected.pose, yaw: selected.pose.yaw + Math.PI / 2 } }) },
   ];
-  const vrActions = activeModule === 'vr' ? [{label:'Montar duas caixas',run:()=>dispatch({type:'prepare-test'})}] : [
+  const vrActions = activeModule === 'vr' ? [{label:'Montar duas caixas',run:()=>dispatch({type:'prepare-test'})}, {label:tutorialStep===7?'Concluir tutorial':'Tutorial de locomoção',run:()=>tutorialGo(tutorialStep===7?8:0)}] : [
     ...(activeModule === 'road' ? [
       { label: flight ? 'Modo caminhada' : 'Modo voo', run: () => { setFlight(!flight); visit('entry'); } },
       { label: 'Entrar no equipamento', run: () => { setFlight(false); visit('inside'); } },
@@ -147,7 +152,13 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
   const vrPages = Math.max(1, Math.ceil(vrActions.length / 6));
   const safePage = Math.min(page, vrPages - 1);
   const assembly = !presenting || activeModule === 'vr';
-  return <><div className="vr-launch" style={{ padding: '8px 16px' }}><button className="vr-primary" disabled={!supported || !renderer || pending || presenting} onClick={() => void enter()}>{pending ? 'Conectando…' : `Entrar em VR · ${activeModule === 'product' ? 'Produto no Goodpack' : activeModule === 'road' ? 'Estufagem' : 'Montagem MB6'}`}</button> <small>{xrStatus}</small></div><main className="vr-lab" style={activeModule === 'vr' || presenting ? { gridTemplateColumns: activeModule === 'vr' ? undefined : '1fr' } : { position: 'fixed', left: -10000, top: 0, width: 2, height: 2, minHeight: 2, visibility: 'hidden' }}>
+  return <><div className="vr-launch" style={{ padding: '8px 16px' }}><button className="vr-primary" disabled={!supported || !renderer || pending || presenting} onClick={() => void enter()}>{pending ? 'Conectando…' : `Entrar em VR · ${activeModule === 'product' ? 'Produto no Goodpack' : activeModule === 'road' ? 'Estufagem' : 'Montagem MB6'}`}</button> <small>{xrStatus}</small> {activeModule === 'vr' && <button onClick={()=>tutorialGo(-1)}>Tutorial de locomoção</button>}</div>
+    {!presenting && activeModule === 'vr' && tutorialStep !== -2 && <section className="locomotion-preview" aria-label="Tutorial de locomoção">
+      <h2>{tutorialStep === -1 ? 'Tutorial de locomoção' : tutorialStep === 8 ? 'Pronto para explorar' : (tutorialStep+1)+'/8 · '+TUTORIAL_STEPS[tutorialStep].title}</h2>
+      <p>Entre em VR para praticar. Aqui você pode conhecer as etapas, sem alterar as caixas.</p>
+      {tutorialStep >= 0 && tutorialStep < 8 && <><strong>{TUTORIAL_STEPS[tutorialStep].cue}</strong>{TUTORIAL_STEPS[tutorialStep].lines.map(line=><p key={line}>{line}</p>)}</>}
+      <button onClick={()=>tutorialGo(tutorialStep===-1||tutorialStep===8?0:tutorialStep+1)}>{tutorialStep===-1?'Conhecer etapas':tutorialStep===8?'Repetir':'Próxima etapa'}</button> <button onClick={()=>tutorialGo(-2)}>Fechar tutorial</button>
+    </section>}<main className="vr-lab" style={activeModule === 'vr' || presenting ? { gridTemplateColumns: activeModule === 'vr' ? undefined : '1fr' } : { position: 'fixed', left: -10000, top: 0, width: 2, height: 2, minHeight: 2, visibility: 'hidden' }}>
 
     <aside className="vr-panel" hidden={activeModule !== 'vr'}><p className="vr-eyebrow">LOAD STUDIO · MONTAGEM</p><h1>Monte. Trave. Empilhe.</h1><p>MB6 · 1120 × 1220 × 1076 mm</p>
       <div className="vr-module-choice" aria-label="Módulo de interação"><button aria-pressed={module === 'desktop'} onClick={() => { setModule('desktop'); setTool('assemble'); }}>Desktop · Mouse</button><button aria-pressed={module === 'vr'} onClick={() => { setModule('vr'); setTool('assemble'); setHint('Esquerdo vira e avança/recua. Botão X abre a prancheta; direita seleciona.'); }}>VR · Headset</button></div>
@@ -172,12 +183,13 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
         {!assembly && data?.scene}
         <group visible={assembly}><AssemblyChallenge lab={lab} dispatch={dispatch} /></group>
         {assembly && lab.boxes.map(b => <Crate key={b.id} box={b} selected={b.id === selected.id} tool={module === 'desktop' ? tool : 'assemble'} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onPose={onPose} interaction={{ enabled: module === 'desktop' && tool === 'assemble', busy: setDragging, hint: setHint }} />)}
-        <XRInteraction exploration={{ key: `${activeModule}:${data?.vehicle?.kind ?? ''}`, mode: flight ? 'fly' : 'walk', vehicle: activeModule === 'road' ? data?.vehicle : undefined, view: viewpoint.view, revision: viewpoint.revision }} lab={lab} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onRenderer={setRenderer} onPresenting={setPresenting} onHint={setHint}>
+        {presenting && activeModule === 'vr' && tutorialStep !== -2 && <LocomotionTutorial step={tutorialStep} onStep={tutorialGo} />}
+        <XRInteraction onTutorialSample={activeModule === 'vr' ? tutorialReport : undefined} exploration={{ key: `${activeModule}:${data?.vehicle?.kind ?? ''}`, mode: flight ? 'fly' : 'walk', vehicle: activeModule === 'road' ? data?.vehicle : undefined, view: viewpoint.view, revision: viewpoint.revision }} lab={lab} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onRenderer={setRenderer} onPresenting={setPresenting} onHint={setHint}>
           <mesh position={[0, 0, -0.012]}><boxGeometry args={[0.46, 0.80, 0.018]} /><meshStandardMaterial color="#203541" roughness={0.8} /></mesh>
           {(['product', 'road', 'vr'] as const).map((name, i) => <Label key={name} text={['Produto', 'Estufagem', 'Montagem MB6'][i]} color={activeModule === name ? '#087c70' : '#183747'} position={[-.145 + i * .145, .36, .002]} width={.14} height={.075} action={() => navigate(name)} />)}
           <Label text={activeModule === 'vr' ? `MB6 · Caixa ${selected.id} · ${selected.walls.filter(Boolean).length}/4 paredes · ${selected.locks.filter(Boolean).length}/4 travas` : activeModule === 'road' ? `ESTUFAGEM · ${flight ? 'VOO' : 'CAMINHADA'}` : 'PRODUTO NO GOODPACK'} position={[0, 0.27, 0.002]} width={0.42} />
           <Label text={activeModule === 'vr' ? ['MONTAGEM', 'TRAVAS E CAIXAS', 'POSIÇÃO E ENCAIXE'][safePage] : 'COMANDOS'} position={[0, 0.215, 0.002]} width={0.42} />
-          {vrActions.slice(safePage * 6, safePage * 6 + 6).map((action, i) => <Label key={action.label} text={action.label} position={[activeModule === 'vr' ? 0 : -0.108 + (i % 2) * 0.216, 0.14 - Math.floor(i / 2) * 0.09, 0.002]} action={action.run} width={activeModule === 'vr' ? .42 : .2} height={.075} />)}
+          {vrActions.slice(safePage * 6, safePage * 6 + 6).map((action, i) => <Label key={action.label} text={action.label} position={[activeModule === 'vr' ? 0 : -0.108 + (i % 2) * 0.216, 0.14 - (activeModule === 'vr' ? i : Math.floor(i / 2)) * 0.09, 0.002]} action={action.run} width={activeModule === 'vr' ? .42 : .2} height={.075} />)}
           {activeModule !== 'vr' && <><Label text="‹ Página" position={[-0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + vrPages - 1) % vrPages)} />
           <Label text={`Página ${safePage + 1}/${vrPages} ›`} position={[0.108, -0.035, 0.002]} width={0.2} action={() => setPage(p => (p + 1) % vrPages)} />
           </>}
