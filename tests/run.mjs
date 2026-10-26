@@ -75,6 +75,18 @@ try {
     assert.equal(handPose(null,[],true).thumb,0);
     assert.equal(handPose({...pad,mapping:''},[],true).thumb,0);
   });
+  const {doorGripHeld,clipboardHeld}=await load('utils/handPose.js');
+  test('Door requires trigger plus grip plus face contact; clipboard requires pressed X',()=>{
+    const buttons=Array.from({length:6},()=>({value:0,pressed:false,touched:false})),pad={mapping:'xr-standard',buttons};
+    buttons[0].pressed=true;assert.equal(doorGripHeld(pad),false);
+    buttons[1].value=.8;assert.equal(doorGripHeld(pad),false);
+    buttons[3].touched=true;assert.equal(doorGripHeld(pad),false);
+    buttons[4].touched=true;assert.equal(doorGripHeld(pad),true);assert.equal(clipboardHeld(pad),false);
+    buttons[4].pressed=true;assert.equal(clipboardHeld(pad),true);
+    buttons[4].pressed=false;buttons[4].touched=false;buttons[5].touched=true;assert.equal(doorGripHeld(pad),true);
+    buttons[1].value=0;assert.equal(doorGripHeld(pad),false);
+    assert.equal(doorGripHeld(null),false);assert.equal(clipboardHeld(null),false);
+  });
   test('Grid capacity, payload limit, and generated placement are consistent', () => {
     const result = calculateGridPacking(MB5_CONTAINER, product);
     assert.equal(result.totalQuantity, 210); assert.equal(result.payloadLimitedQuantity, 165);

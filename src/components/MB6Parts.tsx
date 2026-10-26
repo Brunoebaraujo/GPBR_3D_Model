@@ -93,7 +93,7 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
     <Part position={[direction * 0.085, 0, 0.012]} size={[0.025, 0.045, 0.035]} color="#356b99" />
     <group ref={carriage}>
       <Suspense fallback={null}><LatchSupport direction={direction} slider /></Suspense>
-      <group ref={handle} position={[-.056 * direction, .008609009, .014]}>
+      <group ref={handle} name="latch-handle" position={[-.056 * direction, .008609009, .014]}>
         <Suspense fallback={null}><LatchSupport direction={direction} handle /></Suspense>
       </group>
     </group>

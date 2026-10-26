@@ -18,3 +18,10 @@ export function handPose(pad: HandPad | null | undefined, profiles: readonly str
   const touched=standard && thumbIndices.some(i=>{const b=pad.buttons[i];return b && (b.touched || b.pressed || b.value>.1);});
   return {index,fingers,thumb:touched? .8:0,roll:sign*Math.PI/2};
 }
+
+export function doorGripHeld(pad: HandPad | null | undefined): boolean {
+  if(pad?.mapping!=='xr-standard')return false;
+  const pressed=(i:number)=>!!pad.buttons[i] && (pad.buttons[i].pressed || pad.buttons[i].value>=.7);
+  return pressed(0) && pressed(1) && [4,5].some(i=>!!pad.buttons[i] && (pad.buttons[i].touched || pad.buttons[i].pressed));
+}
+export const clipboardHeld = (pad: HandPad | null | undefined) => pad?.mapping==='xr-standard' && !!pad.buttons[4]?.pressed;
