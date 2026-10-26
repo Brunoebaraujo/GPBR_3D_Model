@@ -221,7 +221,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         beams[i].beam.material.color.set(h.down ? '#ffcd5c' : '#42e8cc');
         const distance = grab?.distances[i] ?? 4;
         beams[i].beam.scale.z = distance / 4; beams[i].beam.position.z = -distance / 2;
-        beams[i].marker.visible = !!grab && h.tracked;
+        beams[i].marker.visible = false;
       });
       const pad = (side: XRHandedness) => hands.find(h => h.tracked && h.source?.handedness === side)?.source?.gamepad ?? null;
       const pads = { left: pad('left'), right: pad('right') };
@@ -351,7 +351,15 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
           hint('Movimento bloqueado: eleve a caixa antes de aproximá-la da outra.');
         }
         held.object.updateWorldMatrix(true, false);
-        beams.forEach((beam,i) => beam.marker.position.copy(held.object.localToWorld(held.anchors[i].clone())));
+        projectedHands.forEach((hand,i)=>{
+          const anchor=held.anchors[i];
+          hand.root.visible=hands[i].tracked;models[i].root.visible=false;
+          hand.root.position.copy(held.object.localToWorld(anchor.clone()));
+          // Fingers face the crate; local up keeps the thumbs vertical.
+          hand.root.quaternion.copy(held.object.getWorldQuaternion(new Quaternion()))
+            .multiply(new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.atan2(anchor.x,anchor.z)));
+          hand.update(1,hands[i].source?.handedness==='left');
+        });
       } else hands.forEach((h, i) => {
         const target = h.target;
         if (!h.down || !h.tracked || !target) return;
