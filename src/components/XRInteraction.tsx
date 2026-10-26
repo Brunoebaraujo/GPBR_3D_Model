@@ -1,3 +1,4 @@
+import type { TutorialSample } from '../utils/locomotionTutorial';
 import { handPose, doorGripHeld, clipboardHeld } from '../utils/handPose';
 import { touchButton, type TouchState } from '../utils/xrTouch';
 import { constrainCrates, explorationStart, constrainExploration, type Exploration } from '../utils/xrNavigation';
@@ -8,16 +9,16 @@ import { BoxGeometry, SphereGeometry, Group, Mesh, MeshBasicMaterial, Object3D, 
 import { wallGrabPoint, supportedPose, captureStackPose, reduceLab, type Action, type Lab, type Pose } from '../utils/mb6Assembly';
 import { boxGrabCorner, canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose, leverMotion, navigationInput, navigateRig, wallPullAngle, wallPullComplete, type LeverPhase, type Point3 } from '../utils/xrInteraction';
 
-type Props = { exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
+type Props = { onTutorialSample?: (sample: TutorialSample) => void; exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
 type LeverTarget = { boxId: number; index: number; direction: number };
 type Target = { object: Object3D; boxId?: number; lever?: LeverTarget; activate?: () => void; panel: boolean; wall?: { boxId: number; index: number }; boxObject?: Object3D; hit: Vector3 };
 type Hand = { source: XRInputSource | null; down: boolean; target: Target | null; anchor: Vector3; phase: LeverPhase; slideDirection: number; tracked: boolean; wallStart: number; radius: number; pendingWall: boolean };
 type Grab = { id: number; object: Object3D; origin: Pose; start: [Point3, Point3]; candidate: Pose; distances: [number, number]; anchors: [Vector3, Vector3] };
 
 // The viewer and controllers share a rig; the clipboard follows the left grip while held.
-export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint, children, exploration }: Props) {
+export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint, children, exploration, onTutorialSample }: Props) {
   const { gl, scene, camera } = useThree();
-  const latest = useRef({ lab, dispatch, onHint, exploration }); latest.current = { lab, dispatch, onHint, exploration };
+  const latest = useRef({ lab, dispatch, onHint, exploration, onTutorialSample }); latest.current = { lab, dispatch, onHint, exploration, onTutorialSample };
   const board = useRef<Group>(null);
   const feedback = useRef<() => void>(() => undefined);
   const supports = useRef(new Map<number, number | null>());
@@ -253,6 +254,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const orientation = viewer.transform.orientation;
       const forward = new Vector3(0,0,-1).applyQuaternion(new Quaternion(orientation.x,orientation.y,orientation.z,orientation.w));
       const headYaw = Math.atan2(-forward.x,-forward.z);
+      const beforeX=rig.position.x,beforeZ=rig.position.z,beforeYaw=rig.rotation.y;
       if (!menu && !hands.some(h => h.down || h.source?.gamepad?.buttons[0]?.pressed)) {
         const nav = navigationInput(pads,dt);
         const config = latest.current.exploration;
@@ -273,6 +275,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         const bounded=constrainCrates({x:rig.position.x,y:rig.position.y,z:rig.position.z,yaw:rig.rotation.y},viewer.transform.position,latest.current.lab.boxes);
         rig.position.set(bounded.x,bounded.y,bounded.z);rig.updateMatrixWorld(true);
       }
+      latest.current.onTutorialSample?.({headYaw, distance:Math.hypot(rig.position.x-beforeX,rig.position.z-beforeZ),turn:rig.rotation.y-beforeYaw,rightX:pads.right?.axes[2]??0,rightY:pads.right?.axes[3]??0,leftX:pads.left?.axes[2]??0,menu,dt,moving:!menu&&!hands.some(h=>h.down||h.source?.gamepad?.buttons[0]?.pressed)});
       projectedHands.forEach((hand,i)=>{
         const target=hands[i].target;
         const holding=hands[i].tracked && hands[i].down && !!target?.wall && !!target.object.userData.xrHeld;

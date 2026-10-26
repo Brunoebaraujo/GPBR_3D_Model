@@ -28,6 +28,34 @@ try {
   const clones = (p, result) => result.positions.map((position, i) => ({ ...p, id: `test-${i}`, position }));
   let passed = 0;
   const test = (name, fn) => { fn(); passed++; process.stdout.write(`✓ ${name}\n`); };
+  const {tutorialSample,tutorialState}=await load('utils/locomotionTutorial.js');
+  const sample={headYaw:0,distance:0,turn:0,rightX:0,rightY:0,leftX:0,menu:false,dt:.016,moving:true};
+  test('Tutorial requires actual correct movement, neutral input, and explicit clipboard completion',()=>{
+    for(const step of [-2,-1,7,8]){const st=tutorialState(step);assert.equal(tutorialSample(st,sample),st);}
+    let st=tutorialSample(tutorialState(0),sample);
+    assert.equal(tutorialSample(st,{...sample,headYaw:.1}).step,0);
+    assert.equal(tutorialSample(st,{...sample,headYaw:.4}).step,1);
+    for(const [step,axis,sign] of [[1,'rightY',-1],[2,'rightY',1],[3,'rightX',1],[4,'rightX',-1],[5,'leftX',1]]){
+      st=tutorialState(step);
+      const move={...sample,[axis]:sign,distance:.08,turn:.08};
+      assert.equal(tutorialSample(st,move).amount,0);
+      st=tutorialSample(st,sample);
+      assert.equal(tutorialSample(st,{...move,[axis]:step===5?0:-sign}).amount,0);
+      assert.equal(tutorialSample(st,{...move,distance:0,turn:0}).amount,0);
+      assert.equal(tutorialSample(st,{...move,menu:true}).amount,0);
+      assert.equal(tutorialSample(st,{...move,moving:false}).amount,0);
+      assert.equal(tutorialSample(st,{...move,headYaw:NaN}),st);
+      for(let i=0;i<(step===5?4:3);i++)st=tutorialSample(st,move);
+      assert.equal(st.step,step+1);
+    }
+    st=tutorialState(6);assert.equal(tutorialSample(st,sample).step,6);
+    st=tutorialSample(st,{...sample,menu:true});assert.equal(st.step,7);
+    assert.equal(tutorialSample(st,{...sample,menu:true}).step,7);
+  });
+  test('Tutorial handles headset yaw wrap without a false turn',()=>{
+    const st=tutorialSample(tutorialState(0),{...sample,headYaw:Math.PI-.01});
+    assert.equal(tutorialSample(st,{...sample,headYaw:-Math.PI+.01}).step,0);
+  });
   const { boxGrabCorner } = await load('utils/xrInteraction.js');
   test('Box lifting accepts the full vertical corners with stable IDs and rejects wall centers', () => {
     let baseline;

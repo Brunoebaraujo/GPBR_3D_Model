@@ -2,3 +2,6 @@
 .vr-module-choice{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:18px 0}.vr-module-choice button{padding:14px 7px;font-weight:700}.vr-tools{display:flex;gap:6px}.vr-tools button{flex:1}.vr-corners{display:grid;grid-template-columns:1fr 1fr;gap:6px}.vr-lever-guide{background:#0c202c;padding:10px;border-left:3px solid #41c8b0}.vr-lab summary{cursor:pointer;font-size:12px;margin:16px 0 10px}.vr-mouse-hint{position:absolute;bottom:20px;left:20px;right:20px;z-index:1;background:#132b39e8;border:1px solid #447281;border-radius:10px;padding:12px;font-size:13px;pointer-events:none}.vr-mode-label{display:block;color:#58ddc3;letter-spacing:1.5px;font-size:10px;margin-bottom:6px}.vr-stage canvas{touch-action:none}
 
 .vr-launch{position:fixed;right:16px;bottom:12px;z-index:25;max-width:360px;background:#142734;border:1px solid #447281;border-radius:10px;color:#e4edf2}.vr-launch .vr-primary{background:#177e70;color:white;border:1px solid #50d6b9;border-radius:6px;padding:10px;margin:0 0 4px}.vr-launch small{font-size:10px}
+
+.locomotion-preview { margin: 12px 16px; padding: 20px; border: 1px solid #277f85; border-radius: 12px; background: #122937; color: #fff; max-width: 760px; }
+.locomotion-preview button { padding: 10px 18px; margin-top: 8px; cursor: pointer; }
