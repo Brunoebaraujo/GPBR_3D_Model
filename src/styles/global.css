@@ -565,3 +565,11 @@ button:disabled { opacity:.45; cursor:not-allowed; }
 .petronas-breakdown > div > span:nth-child(2) { flex: 1; }
 .petronas-breakdown strong { font-size: 12px; }
 .petronas-scenario button { width: 100%; font-size: 12px; }
+
+
+/* Petronas optimizer: measured baseline versus multi-start search. */
+.petronas-comparison { border: 1px solid #c2d9e5; border-radius: 7px; padding: 10px; display: flex; flex-direction: column; gap: 9px; background: #edf6fa; }
+.petronas-comparison > div { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 11px; color: #39596d; }
+.petronas-comparison strong { font-size: 13px; color: #145b78; }
+.petronas-breakdown > div > span:nth-child(2) { display: flex; flex-direction: column; }
+.petronas-breakdown small { color: #70838c; font-size: 10px; margin-top: 2px; }
