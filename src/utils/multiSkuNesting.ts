@@ -182,5 +182,10 @@ export const createMultiSkuScenarios = (
     if (!sku?.dimensions || request.maxQuantity !== null && request.maxQuantity <= 0) return [];
     return [{ sku, request, variants: makeVariants(sku, options.allowTilt), volume: exactVolume(sku), index }];
   });
-  return entries.length ? STRATEGIES.map(s => runStrategy(s.id, container, entries, options)) : [];
+  if (!entries.length) return [];
+  const ranked = STRATEGIES.map(s => runStrategy(s.id, container, entries, options))
+    .sort((a, b) => b.volumePercent - a.volumePercent || b.totalQuantity - a.totalQuantity);
+  return ranked.map((scenario, index) => index === 0
+    ? { ...scenario, name: `Melhor encontrado · ${scenario.name}`, description: `${scenario.description} Melhor ocupação entre os quatro métodos testados; ótimo global não garantido.` }
+    : scenario);
 };
