@@ -534,3 +534,34 @@ button:disabled { opacity:.45; cursor:not-allowed; }
 .road-setup-empty { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:45px; color:#466678; }
 .road-setup-empty strong { letter-spacing:.1em; color:#148a76; }
 .road-setup-empty p { max-width:430px; font-size:14px; line-height:1.6; }
+
+
+/* Petronas multi-SKU nesting - scoped to the Product in Goodpack workspace. */
+.petronas-panel { gap: 14px; }
+.petronas-panel > .section { gap: 10px; }
+.petronas-panel .field select, .petronas-panel .field input { width: 100%; }
+.petronas-sku {
+  border: 1px solid #d5e0e8; background: #fff; border-radius: 8px;
+  padding: 10px; display: flex; flex-direction: column; gap: 8px;
+}
+.petronas-sku-heading { display: flex; align-items: center; gap: 7px; font-size: 12px; line-height: 1.4; }
+.petronas-sku-heading strong { flex: 1; }
+.petronas-swatch { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 3px; }
+.petronas-remove { padding: 0 7px; line-height: 23px; font-size: 20px; }
+.petronas-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.petronas-fields label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: #536777; }
+.petronas-fields input { width: 100%; font-size: 12px; padding: 7px; }
+.petronas-note { font-size: 11px; color: #84561a; line-height: 1.5; }
+.petronas-cages { font-size: 11px; color: #60707c; line-height: 1.6; }
+.petronas-cages summary { cursor: pointer; }
+.petronas-scenario {
+  display: flex; flex-direction: column; gap: 9px; padding: 12px;
+  background: #fff; border: 1px solid #d7e1e8; border-radius: 8px; font-size: 12px;
+}
+.petronas-scenario.active { border-color: #257faf; box-shadow: inset 0 0 0 1px #257faf; }
+.petronas-scenario-title { display: flex; justify-content: space-between; gap: 8px; color: #1d455e; }
+.petronas-breakdown { display: flex; flex-direction: column; gap: 7px; }
+.petronas-breakdown > div { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.petronas-breakdown > div > span:nth-child(2) { flex: 1; }
+.petronas-breakdown strong { font-size: 12px; }
+.petronas-scenario button { width: 100%; font-size: 12px; }
