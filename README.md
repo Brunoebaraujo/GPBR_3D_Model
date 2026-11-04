@@ -446,6 +446,28 @@ conservador. As quantidades históricas em gaiolas 1,20 × 1,20 (32 e 48),
 1,14 × 1,14 e 0,90 × 0,90 estão armazenadas separadamente como referências,
 não como capacidades de Goodpack.
 
+### Otimização de nesting com topo preservado (04/11/2026)
+
+O modo **Catálogo Petronas** agora obriga **topo para cima**. A interface não
+oferece mais a opção de deitar embalagens: apenas giros de 0° ou 90° sobre a
+base (equivalentes a trocar largura e profundidade). Os tambores permanecem
+verticais. O editor personalizado fora do modo Petronas não foi alterado.
+
+A otimização faz **64 buscas multistart determinísticas**, com sementes,
+ordens e quatro objetivos diferentes. Cada tentativa usa **MaxRects 2D**
+(regiões livres máximas) no piso e constrói pilhas verticais de caixas iguais.
+Depois tenta preencher o espaço sobre colunas retangulares mais baixas,
+limitando cada nova embalagem à superfície da coluna de suporte (sem balanço
+lateral). Tambores não recebem outros produtos por cima. A busca não simula
+capacidade física de empilhamento ou deformação.
+
+A interface mostra as cinco melhores **composições distintas de SKU/orientação**,
+a referência do algoritmo anterior, o ganho em pontos percentuais, a quantidade
+por SKU, e quantas embalagens ficaram a 0°/90°. O algoritmo anterior continua
+como candidato para impedir regressões de ocupação. Não há garantia de ótimo
+matemático; os testes validam colisões, suporte geométrico integral, limites
+dimensionais e pesos conhecidos nos modelos MB5/MB6.
+
 ### Limitações geométricas e operacionais
 
 O algoritmo de múltiplos SKUs usa partição de espaços retangulares **disjuntos**
