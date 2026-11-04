@@ -20,7 +20,7 @@ try {
   const load = path => import(pathToFileURL(join(output, path)).href);
   const { calculateGridPacking, calculateBestPacking, findBestOrientation, MAX_PREVIEW_OBJECTS } = await load('utils/packingCalculator.js');
   const { calculateMixedPacking } = await load('utils/mixedPacking.js');
-  const { getRotatedBoundingBox } = await load('utils/boundingBox.js');
+  const { getRotatedBoundingBox, getPackingObjectBounds } = await load('utils/boundingBox.js');
   const { isTopUp, getObjectVolume, TOP_FACES } = await load('utils/productGeometry.js');
   const { validateFit } = await load('utils/fitValidation.js');
   const { MB5_CONTAINER } = await load('data/skus.js');
@@ -849,7 +849,7 @@ try {
     for(let i=0;i<4;i++) {const p=wallGrabPoint(i),height=MB6.h-.035-WALL_PIVOT_Y[i];assert.equal(p.x,0);assert.equal(p.y,i===0?height/2+.01:height);}
   });
 
-  const { createMultiSkuScenarios } = await load('utils/multiSkuNesting.js');
+  const { createMultiSkuScenarios, optimizeMultiSkuNesting } = await load('utils/multiSkuNesting.js');
   const { PETRONAS_SKUS } = await load('data/petronas.js');
   test('Petronas catalog keeps supplied dimensions and does not invent unknown CX 24x1 KG', () => {
     assert.deepEqual(PETRONAS_SKUS.find(s => s.id === 'cx24x1').dimensions, { width: 476, depth: 357, height: 310 });
@@ -866,9 +866,10 @@ try {
     ];
     for (const container of [MB5_CONTAINER, MB6_CONTAINER]) {
       const scenarios = createMultiSkuScenarios(container, items, { spacingMm: 5, allowTilt: false, allowStacking: true });
-      assert.equal(scenarios.length, 4);
+      assert.ok(scenarios.length > 0 && scenarios.length <= 5);
       for (const scenario of scenarios) {
         assert.ok(scenario.totalQuantity > 0);
+        assert.ok(scenario.objects.every(o => o.keepTopUp && o.rotation.x === 0 && o.rotation.y === 0 && [0, 90].includes(o.rotation.z) && isTopUp(o)));
         assert.equal(scenario.weightVerified, true);
         assert.ok(scenario.knownWeightKg <= container.maxPayloadKg);
         assert.ok(scenario.counts.cx24x1 <= 12 && scenario.counts.bd20l <= 15 && scenario.counts.bd10kg <= 8);
@@ -881,10 +882,61 @@ try {
     const unknown = createMultiSkuScenarios(MB5_CONTAINER, [
       { skuId: 'cx24x1', maxQuantity: 4, grossWeightKg: null },
     ], options);
-    assert.equal(unknown.length, 4);
+    assert.ok(unknown.length > 0 && unknown.length <= 5);
     assert.ok(unknown.every(s => !s.weightVerified && s.warnings.some(w => w.includes('NÃO validada'))));
     assert.ok(unknown.every(s => s.objects.every(o => o.position.z === o.dimensions.height / 2)));
     assert.deepEqual(createMultiSkuScenarios(MB5_CONTAINER, [{ skuId: 'cx24x1kg', maxQuantity: null, grossWeightKg: null }], options), []);
+  });
+
+  test('Petronas search compares 64 upright permutations and never regresses its greedy baseline', () => {
+    const configs = [
+      { selected: ['cx24x1', 'bd20l'], spacingMm: 0, stacking: true },
+      { selected: ['cx12x1', 'cx24x05', 'bd20kg'], spacingMm: 3, stacking: true },
+      { selected: ['cx6x4', 'cx36x05', 'bd10kg'], spacingMm: 0, stacking: false },
+    ];
+    for (const model of [MB5_CONTAINER, { ...MB5_CONTAINER, name: 'MB6', internalDimensions: { width: 1069, depth: 1187, height: 981 } }]) {
+      for (const config of configs) {
+        const selected = config.selected.map(skuId => ({ skuId, maxQuantity: null, grossWeightKg: null }));
+        const options = { spacingMm: config.spacingMm, allowStacking: config.stacking };
+        const result = optimizeMultiSkuNesting(model, selected, options);
+        assert.equal(result.uprightOnly, true);
+        assert.equal(result.attempts, 64);
+        assert.ok(result.scenarios.length > 0 && result.scenarios.length <= 5);
+        assert.ok(result.scenarios[0].volumePercent >= result.baseline.volumePercent - 1e-9);
+        for (const scenario of result.scenarios) {
+          const validation = validateFit(scenario.objects, model);
+          assert.ok(validation.fits, model.name + '/' + scenario.name + ' ' + validation.warnings.slice(0, 3).join(', '));
+          assert.ok(scenario.objects.every(o => o.keepTopUp && o.rotation.x === 0 && o.rotation.y === 0 && [0, 90].includes(o.rotation.z) && isTopUp(o)));
+          for (const obj of scenario.objects) {
+            const bounds = getPackingObjectBounds(obj);
+            if (bounds.minZ < 0.001) continue;
+            assert.ok(scenario.objects.some(base => {
+              if (base.id === obj.id || base.type === 'cylinder') return false;
+              const support = getPackingObjectBounds(base);
+              return Math.abs(support.maxZ - bounds.minZ) < 0.001
+                && support.minX <= bounds.minX + 0.001 && support.maxX >= bounds.maxX - 0.001
+                && support.minY <= bounds.minY + 0.001 && support.maxY >= bounds.maxY - 0.001;
+            }), 'Unsupported raised item ' + obj.id);
+          }
+        }
+        process.stdout.write(`Petronas benchmark ${model.name}: ${config.selected.join('+')} baseline=${result.baseline.volumePercent.toFixed(2)}% best=${result.scenarios[0].volumePercent.toFixed(2)}% (${result.scenarios[0].totalQuantity} pcs)\\n`);
+      }
+    }
+  });
+  test('Petronas known weights and SKU ceilings are respected by all candidate layouts', () => {
+    for (const container of [MB5_CONTAINER, { ...MB5_CONTAINER, name: 'MB6', internalDimensions: { width: 1069, depth: 1187, height: 981 } }]) {
+      const selected = [
+        { skuId: 'cx24x1', maxQuantity: 9, grossWeightKg: 52 },
+        { skuId: 'bd20l', maxQuantity: 11, grossWeightKg: 48 },
+        { skuId: 'cx12x1', maxQuantity: 10, grossWeightKg: 37 },
+      ];
+      const result = optimizeMultiSkuNesting(container, selected, { spacingMm: 8, allowStacking: true });
+      for (const scenario of result.scenarios) {
+        assert.ok(scenario.knownWeightKg <= container.maxPayloadKg + 1e-6);
+        assert.ok(scenario.counts.cx24x1 <= 9 && scenario.counts.bd20l <= 11 && scenario.counts.cx12x1 <= 10);
+        assert.ok(validateFit(scenario.objects, container).fits);
+      }
+    }
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }
