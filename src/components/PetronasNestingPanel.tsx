@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ContainerSpec } from '../types';
 import { PETRONAS_SKUS } from '../data/petronas';
 import {
-  createMultiSkuScenarios, type MultiSkuScenario, type PetronasSelection,
+  optimizeMultiSkuNesting, type MultiSkuScenario, type PetronasSelection,
   type MultiSkuOptions,
 } from '../utils/multiSkuNesting';
 
@@ -21,10 +21,12 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
     { skuId: 'bd20l', maxQuantity: null, grossWeightKg: null },
   ]);
   const [options, setOptions] = useState<MultiSkuOptions>({
-    spacingMm: 0, allowTilt: false, allowStacking: true,
+    spacingMm: 0, allowStacking: true,
   });
   const [activeScenario, setActiveScenario] = useState<string | null>(null);
-  const scenarios = useMemo(() => createMultiSkuScenarios(container, selected, options), [container, selected, options]);
+  const optimization = useMemo(() => optimizeMultiSkuNesting(container, selected, options), [container, selected, options]);
+  const scenarios = optimization.scenarios;
+  const baseline = optimization.baseline;
 
   useEffect(() => { setActiveScenario(null); }, [container]);
 
@@ -53,7 +55,7 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
     <aside className="panel properties-panel petronas-panel">
       <p className="eyebrow">Petronas · Catálogo de embalagens</p>
       <h2>Nesting misto MB5 / MB6</h2>
-      <p className="muted">Selecione vários SKUs pelo dropdown. Gere e compare arranjos com cores separadas por embalagem. As quantidades das gaiolas são apenas referência.</p>
+      <p className="muted">Selecione múltiplos SKUs. O algoritmo testa diferentes ordens e rotações horizontais, sem deitar as embalagens. As quantidades nas gaiolas são apenas referência.</p>
 
       <div className="section">
         <h3>1. Seleção de produtos</h3>
@@ -108,12 +110,13 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
             onChange={event => patchOptions({ spacingMm: Math.min(100, Math.max(0, Number(event.target.value) || 0)) })} />
         </label>
         <label className="checkbox-field"><input type="checkbox" checked={options.allowStacking} onChange={event => patchOptions({ allowStacking: event.target.checked })} />Empilhar caixas em camadas (simulação geométrica)</label>
-        <label className="checkbox-field"><input type="checkbox" checked={options.allowTilt} onChange={event => patchOptions({ allowTilt: event.target.checked })} />Permitir caixas deitadas (experimental)</label>
-        <p className="muted">Tambores permanecem verticais e não recebem caixas sobre eles. Folga vertical é zero entre camadas apoiadas. Apoio, resistência, amarração e movimentação não são certificados.</p>
+        <p className="muted"><strong>Topo sempre para cima:</strong> apenas rotações horizontais de 0° e 90°. Tambores permanecem verticais e não recebem outras embalagens sobre eles. O empilhamento exige apoio geométrico integral; resistência e movimentação não são certificadas.</p>
       </div>
 
       <div className="section">
         <h3>3. Cenários calculados · {container.name}</h3>
+        <p className="muted">{optimization.attempts} permutações testadas · até 5 combinações distintas · sem mudança da face superior.</p>
+        {baseline && <div className="petronas-comparison"><div><span>Algoritmo anterior</span><strong>{pretty(baseline.volumePercent)}%</strong></div><div><span>Melhor resultado encontrado</span><strong>{pretty(scenarios[0]?.volumePercent ?? 0)}%</strong></div><div><span>Ganho de ocupação</span><strong>+{pretty(Math.max(0, (scenarios[0]?.volumePercent ?? 0) - baseline.volumePercent))} p.p.</strong></div></div>}
         {scenarios.map(scenario => <div className={`petronas-scenario ${activeScenario === scenario.id ? 'active' : ''}`} key={scenario.id}>
           <div className="petronas-scenario-title"><strong>{scenario.name}</strong><strong>{pretty(scenario.volumePercent)}%</strong></div>
           <p className="muted">{scenario.description}</p>
@@ -121,7 +124,9 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
           <div className="petronas-breakdown">
             {selected.filter(item => scenario.counts[item.skuId]).map(item => {
               const sku = PETRONAS_SKUS.find(value => value.id === item.skuId)!;
-              return <div key={sku.id}><span className="petronas-swatch" style={{ backgroundColor: sku.color }} /><span>{sku.label}</span><strong>{scenario.counts[sku.id]}</strong></div>;
+              const units = scenario.objects.filter(object => object.sourceObjectId === sku.id);
+              const rotated = units.filter(object => object.rotation.z === 90).length;
+              return <div key={sku.id}><span className="petronas-swatch" style={{ backgroundColor: sku.color }} /><span>{sku.label}<small>{units.length - rotated} sem giro · {rotated} giradas 90°</small></span><strong>{scenario.counts[sku.id]}</strong></div>;
             })}
           </div>
           {scenario.totalQuantity === 0 && <p className="warning-text">Nenhum produto coube com as restrições atuais.</p>}
@@ -131,7 +136,7 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
         </div>)}
       </div>
       {activeScenario !== null && <button type="button" onClick={() => { invalidate(); }}>Limpar prévia 3D</button>}
-      <p className="muted">Resultados heurísticos, não prova do ótimo global. Verifique pesos, folgas reais, diâmetros máximos e resistência das embalagens antes de adotar uma configuração operacional.</p>
+      <p className="muted">Busca heurística: a melhor solução dentre as permutações testadas, sem garantia de ótimo global. Valide pesos, dimensões reais, resistência e amarração antes da operação.</p>
     </aside>
   );
 }
