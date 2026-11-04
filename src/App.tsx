@@ -69,7 +69,10 @@ export function ProductWorkspace() {
   const calculatePacking = nestingMode === 'mixed' ? calculateMixedPacking : calculateBestPacking;
   const selectedObject = objects.find((object) => object.id === selectedObjectId) ?? null;
 
-  const displayedObjects = productMode === 'petronas' ? (previewObjects ?? []) : (previewObjects ?? objects);
+  const displayedObjects = useMemo(
+    () => productMode === 'petronas' ? (previewObjects ?? []) : (previewObjects ?? objects),
+    [productMode, previewObjects, objects],
+  );
   const validation = useMemo(() => validateFit(displayedObjects, container), [displayedObjects, container]);
 
   const clearDerivedResults = () => {
