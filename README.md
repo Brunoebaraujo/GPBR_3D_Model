@@ -404,3 +404,64 @@ fixed-depth grab so they cannot change reach.
 
 ### Wall 1 sliding seat
 Wall 1 now clears wall 3 latches using an illustrative 50 mm sliding-hinge travel. It rotates while raised and descends only once upright; folding reverses this order. The assembly display and its collision envelope use a 279.5 mm visual collapsed height to clear the modeled hardware and lid. The manufacturer reference remains 224 mm; hinge/hardware dimensions require measurement before claiming dimensional fidelity.
+
+
+## Petronas · nesting misto de SKUs no Produto no Goodpack
+
+No menu **Produto no Goodpack**, escolha **Catálogo Petronas** na barra lateral.
+O editor **Personalizado** anterior permanece separado e inalterado.
+
+- Selecione um ou mais SKUs no dropdown, acrescente/remova produtos e ajuste a
+  **quantidade máxima** de cada tipo (campo vazio = sem limite).
+- Informe o **peso bruto por embalagem**, incluindo produto e embalagem, para
+  habilitar a validação de carga útil de até 1.650 kg por MB5/MB6. Sem todos os
+  pesos a ferramenta mostra **NÃO validada**: zero não representa um peso conhecido.
+- Ajuste folga **horizontal** entre embalagens, empilhamento e, opcionalmente,
+  caixas deitadas. Tambores permanecem verticais e não suportam caixas acima.
+- Compare quatro heurísticas: embalagens maiores primeiro, mix equilibrado
+  (volume dividido entre os SKUs), prioridade da primeira seleção e peças menores
+  primeiro. O resultado de maior ocupação dentre os métodos aparece no topo;
+  cada cenário permite **Visualizar cenário no 3D** e exibe quantidade por SKU.
+- Troque MB5/MB6 à esquerda para recalcular as opções; as regras anteriores
+  de criação de produtos e nesting de um único SKU não são alteradas.
+
+### Catálogo transcrito das imagens Petronas de 04/11/2026
+
+| SKU | Dimensões / envelope (mm) | Geometria |
+| --- | --- | --- |
+| CX 24×1 | 476 × 357 × 310 | Caixa |
+| CX 12×1 | 352 × 232 × 223 | Caixa |
+| CX 4×4 | 442 × 442 × 217 | Caixa |
+| CX 6×4 | 448 × 326 × 270 | Caixa |
+| CX 24×0,5 | 444 × 257 × 167 | Caixa |
+| CX 36×0,5 KG | 472 × 352 × 242 | Caixa |
+| BD 10 KG | Ø270 × 287 alto | Tambor (cilindro) |
+| BD 20 KG | Ø303 × 426 alto | Tambor (cilindro) |
+| BD 20 L | 398 × 272 × 272 | Envelope retangular |
+| CX 24×1 KG | **Não informado** | Não selecionável |
+
+Os diâmetros Ø270 e Ø303 foram informados como **diâmetros superiores**.
+É necessário confirmar o maior diâmetro externo para que o envelope seja
+conservador. As quantidades históricas em gaiolas 1,20 × 1,20 (32 e 48),
+1,14 × 1,14 e 0,90 × 0,90 estão armazenadas separadamente como referências,
+não como capacidades de Goodpack.
+
+### Limitações geométricas e operacionais
+
+O algoritmo de múltiplos SKUs usa partição de espaços retangulares **disjuntos**
+com até 850 peças por cenário. Agrupa produtos de forma determinística,
+prioriza peças assentadas em camadas e alterna rotações ortogonais dentro das
+restrições; não garante o ótimo global. Para tambores, usa o diâmetro como
+envelope de ocupação, mesmo que haja espaço residual entre cilindros. Permitir
+caixas deitadas não significa que a embalagem suporte essa orientação.
+
+**Não** certifica resistência à compressão, apoio estrutural real, estabilidade,
+integridade do líquido, amarração, acessórios ou manuseio. A configuração só é
+operacionalmente confiável após validar os pesos brutos e aprovar as
+orientações/empilhamento com a engenharia de embalagem do cliente.
+
+Os novos cálculos e catálogo estão em `src/utils/multiSkuNesting.ts` e
+`src/data/petronas.ts`; a interface está em
+`src/components/PetronasNestingPanel.tsx`. `npm test` cobre limites,
+colisões, SKUs sem dimensões e marcação de pesos pendentes. O deploy do
+GitHub Pages executa testes e build antes de publicar.
