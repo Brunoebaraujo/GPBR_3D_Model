@@ -113,6 +113,7 @@ const availableCount = (
   usedObjects: number,
   stacking: boolean,
 ) => {
+  if (variant.height > freeHeight + EPS) return 0;
   let count = stacking && item.type !== 'cylinder' ? Math.floor((freeHeight + EPS) / variant.height) : 1;
   count = Math.min(count, MAX_PACKAGES - usedObjects);
   if (item.maxQuantity !== null) count = Math.min(count, item.maxQuantity - counts[item.id]);
@@ -146,7 +147,7 @@ const choose = (
         if (count <= 0) continue;
 
         const heightRatio = count * variant.height;
-        const density = heightRatio / Math.max(1, heightRatio <= 0 ? 1 : Math.floor(containerVolume / (W * D)) > 0 ? containerVolume / (W * D) : heightRatio);
+        const density = heightRatio / Math.max(1, containerVolume / (W * D));
         const totalVolume = count * item.volume;
         const areaFit = reservedW * reservedD / (region.w * region.d);
         const xGap = (region.w - reservedW) / Math.max(1, W);
