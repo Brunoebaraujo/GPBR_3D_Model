@@ -465,3 +465,10 @@ Os novos cálculos e catálogo estão em `src/utils/multiSkuNesting.ts` e
 `src/components/PetronasNestingPanel.tsx`. `npm test` cobre limites,
 colisões, SKUs sem dimensões e marcação de pesos pendentes. O deploy do
 GitHub Pages executa testes e build antes de publicar.
+
+### Diagnóstico de publicação da versão Petronas
+
+O workflow `checks.yml` executa lint, testes e build. O workflow
+`deploy-pages.yml` só deve publicar a versão validada. Quando o menu
+**Catálogo Petronas** não aparecer, verificar Actions > Check packing and road studio
+antes de atribuir o problema ao cache do navegador.
