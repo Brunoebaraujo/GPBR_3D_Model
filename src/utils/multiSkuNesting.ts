@@ -1,7 +1,6 @@
 import type { ContainerSpec, DimensionsMm, PackingObject, RotationDeg } from '../types';
 import { PETRONAS_SKUS, type PetronasSku } from '../data/petronas';
 import { getRotatedBoundingBox } from './boundingBox';
-import { getAllowedRotations } from './productGeometry';
 import { searchUprightLayout, type SearchItem, type SearchResult, type SearchStrategy } from './petronasSearch';
 
 export interface PetronasSelection {
@@ -61,7 +60,9 @@ const makeVariants = (sku: PetronasSku): Variant[] => {
     topFace: '+z', keepTopUp: true,
   };
   // Sempre topo para cima. Caixas podem girar APENAS no plano XY.
-  const rotations = sku.kind === 'cylinder' ? [object.rotation] : getAllowedRotations(object);
+  const rotations: RotationDeg[] = sku.kind === 'cylinder'
+    ? [{ x: 0, y: 0, z: 0 }]
+    : [{ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 90 }];
   const seen = new Set<string>();
   return rotations.map(rotation => {
     const b = getRotatedBoundingBox({ ...object, rotation });
