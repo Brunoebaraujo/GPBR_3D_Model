@@ -3,6 +3,8 @@ import { GOODPACK_MODELS, type GoodpackModel } from '../data/skus';
 
 interface SidebarProps {
   model: GoodpackModel;
+  productMode: 'custom' | 'petronas';
+  onProductModeChange: (mode: 'custom' | 'petronas') => void;
   onModelChange: (model: GoodpackModel) => void;
   onCreateProduct: () => void;
   onEditProduct?: () => void;
@@ -12,7 +14,7 @@ interface SidebarProps {
   onAddObject: (type: PackingObjectType) => void;
 }
 
-export function Sidebar({ model, onModelChange, onAddObject, onCreateProduct, onEditProduct, objects, selectedObjectId, onSelectObject }: SidebarProps) {
+export function Sidebar({ model, onModelChange, productMode, onProductModeChange, onAddObject, onCreateProduct, onEditProduct, objects, selectedObjectId, onSelectObject }: SidebarProps) {
   const container = GOODPACK_MODELS[model];
   return (
     <aside className="panel sidebar">
@@ -22,7 +24,7 @@ export function Sidebar({ model, onModelChange, onAddObject, onCreateProduct, on
         <label>Modelo<select aria-label="Modelo" value={model} onChange={e => onModelChange(e.target.value as GoodpackModel)}><option>MB5</option><option>MB6</option></select></label>
       </div>
 
-      <div className="section"><h2>Produto do cliente</h2><button className="primary-button" onClick={onCreateProduct}>+ Criar produto</button><button disabled={!onEditProduct} onClick={onEditProduct}>Editar produto selecionado</button><div className="product-list">{objects.map(object => <button key={object.id} aria-pressed={object.id === selectedObjectId} onClick={() => onSelectObject(object.id)}>{object.name}</button>)}</div></div>
+      <div className="section"><h2>Produto do cliente</h2><div className="segmented-control"><button type="button" className={productMode === 'custom' ? 'active' : ''} aria-pressed={productMode === 'custom'} onClick={() => onProductModeChange('custom')}>Personalizado</button><button type="button" className={productMode === 'petronas' ? 'active' : ''} aria-pressed={productMode === 'petronas'} onClick={() => onProductModeChange('petronas')}>Catálogo Petronas</button></div>{productMode === 'custom' ? <><button className="primary-button" onClick={onCreateProduct}>+ Criar produto</button><button disabled={!onEditProduct} onClick={onEditProduct}>Editar produto selecionado</button><div className="product-list">{objects.map(object => <button key={object.id} aria-pressed={object.id === selectedObjectId} onClick={() => onSelectObject(object.id)}>{object.name}</button>)}</div></> : <p className="muted">Escolha múltiplos SKUs no painel direito para comparar propostas de nesting no MB5 ou MB6.</p>}</div>
       <dl className="spec-list">
         <div>
           <dt>Dimensões externas</dt>
@@ -48,8 +50,8 @@ export function Sidebar({ model, onModelChange, onAddObject, onCreateProduct, on
         </div>
       </dl>
 
-      <p className="muted">Nesting de um produto por simulação. Escolha orientação única ou combine giros nas sobras. Não considera deformação ou resistência ao empilhamento.</p>
-      <div className="section orientation-legend">
+      <p className="muted">{productMode === 'custom' ? 'Nesting de um produto por simulação. Escolha orientação única ou combine giros nas sobras.' : 'Nesting misto por SKU, com limites de quantidade, folga e comparação de cenários.'} Não considera deformação ou resistência ao empilhamento.</p>
+      {productMode === 'custom' && <div className="section orientation-legend">
         <h2>Orientação</h2>
         <div className="legend-items" aria-label="Object face color legend">
           <span>
@@ -65,9 +67,9 @@ export function Sidebar({ model, onModelChange, onAddObject, onCreateProduct, on
             Azul = Corpo
           </span>
         </div>
-      </div>
+      </div>}
 
-      <div className="section">
+      {productMode === 'custom' && <div className="section">
         <h2>Adicionar sólido rápido</h2>
         <div className="button-stack">
           <button type="button" onClick={() => onAddObject('block')}>
@@ -80,7 +82,7 @@ export function Sidebar({ model, onModelChange, onAddObject, onCreateProduct, on
             Cilindro
           </button>
         </div>
-      </div>
+      </div>}
     </aside>
   );
 }
