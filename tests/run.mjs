@@ -900,7 +900,7 @@ try {
         const options = { spacingMm: config.spacingMm, allowStacking: config.stacking };
         const result = optimizeMultiSkuNesting(model, selected, options);
         assert.equal(result.uprightOnly, true);
-        assert.equal(result.attempts, 64);
+        assert.ok(result.attempts >= 64, 'Circular search expands rectangular permutations');
         assert.ok(result.scenarios.length > 0 && result.scenarios.length <= 5);
         assert.ok(result.scenarios[0].volumePercent >= result.baseline.volumePercent - 1e-9);
         for (const scenario of result.scenarios) {
@@ -1001,6 +1001,86 @@ try {
           }
         }
       }
+    }
+  });
+
+  const { searchCircularPailLayout, circularPatterns } = await load('utils/petronasCirclePacking.js');
+  test('Round BD20KG yields 15 staggered columns in MB5 versus 12 rectangular-grid columns', () => {
+    const sku = PETRONAS_SKUS.find(item => item.id === 'bd20kg');
+    const item = {
+      id: sku.id, type: sku.kind, dimensions: sku.dimensions,
+      volume: Math.PI * (303 / 2) ** 2 * 426, weight: 1,
+      maxQuantity: null, priority: 0,
+      variants: [{ width: 303, depth: 303, height: 426, rotationZ: 0 }],
+    };
+    const container = { width: 1090, depth: 1437, height: 1020, maxWeight: 1650 };
+    const run = (stagger, axis, stacking) => searchCircularPailLayout(container, [item],
+      { spacingMm: 0, allowStacking: stacking },
+      { primarySkuId: item.id, axis, stagger, alternateFirst: false, fraction: 1 });
+    const square = run(false, 'y', false);
+    const hex = run(true, 'y', false);
+    assert.equal(square.placements.length, 12);
+    assert.equal(hex.placements.length, 15);
+    const stacked = run(true, 'y', true);
+    assert.equal(stacked.placements.length, 30, 'Two layers of 426-mm drums fit MB5');
+    assert.equal(new Set(stacked.placements.map(p => `${p.x.toFixed(3)},${p.y.toFixed(3)}`)).size, 15);
+    for (const placement of hex.placements) {
+      assert.ok(placement.x >= -1e-6 && placement.y >= -1e-6
+        && placement.x + 303 <= container.width + 1e-6
+        && placement.y + 303 <= container.depth + 1e-6);
+    }
+    for (let i = 0; i < hex.placements.length; i++) for (let j = i + 1; j < hex.placements.length; j++) {
+      assert.ok(Math.hypot(hex.placements[i].x - hex.placements[j].x,
+        hex.placements[i].y - hex.placements[j].y) >= 303 - 1e-6, 'True circle collision');
+    }
+  });
+  test('BD circular nesting keeps all three-layer constraints, payload and quantities', () => {
+    const base = { width: 1090, depth: 1437, height: 1020, maxWeight: 1650 };
+    for (const skuId of ['bd10kg', 'bd20kg']) {
+      const sku = PETRONAS_SKUS.find(item => item.id === skuId);
+      const d = sku.dimensions.width;
+      const item = {
+        id: sku.id, type: sku.kind, dimensions: sku.dimensions,
+        volume: Math.PI * (d / 2) ** 2 * sku.dimensions.height, weight: 10,
+        maxQuantity: null, priority: 0,
+        variants: [{ width: d, depth: d, height: sku.dimensions.height, rotationZ: 0 }],
+      };
+      const patterns = circularPatterns([item]);
+      assert.ok(patterns.some(p => p.stagger) && patterns.some(p => !p.stagger));
+      for (const pattern of patterns) {
+        const result = searchCircularPailLayout(base, [item], { spacingMm: 4, allowStacking: true }, pattern);
+        assert.ok(result.weight <= base.maxWeight);
+        const columns = new Map();
+        for (const p of result.placements) {
+          const key = `${p.x},${p.y}`;
+          columns.set(key, [...(columns.get(key) ?? []), p.z]);
+          assert.equal(p.rotationZ, 0);
+          assert.ok(p.z + sku.dimensions.height <= base.height + 1e-6);
+        }
+        for (const zs of columns.values()) {
+          assert.ok(zs.length <= 3);
+          assert.deepEqual(zs, zs.map((_, index) => index * sku.dimensions.height));
+        }
+        const capped = searchCircularPailLayout(base,
+          [{ ...item, maxQuantity: 7, weight: 150 }],
+          { spacingMm: 0, allowStacking: true }, pattern);
+        assert.ok(capped.placements.length <= 7);
+        assert.ok(capped.weight <= 1650);
+      }
+    }
+  });
+  test('Petronas optimizer selects true circular BD patterns and keeps 3D collision validation', () => {
+    for (const model of [MB5_CONTAINER, { ...MB5_CONTAINER, name: 'MB6', internalDimensions: { width: 1069, depth: 1187, height: 981 } }]) {
+      const selection = [{ skuId: 'bd20kg', maxQuantity: null, grossWeightKg: 10 }];
+      const optimized = optimizeMultiSkuNesting(model, selection, { spacingMm: 0, allowStacking: true });
+      assert.ok(optimized.attempts > 64);
+      assert.ok(optimized.scenarios[0].totalQuantity > (model.name.includes('MB6') ? 18 : 24));
+      for (const scenario of optimized.scenarios) {
+        const fit = validateFit(scenario.objects, model);
+        assert.ok(fit.fits, 'Round BD collision: ' + fit.warnings.join(', '));
+        assert.ok(scenario.objects.every(o => o.keepTopUp && isTopUp(o)));
+      }
+      process.stdout.write(`Circular BD benchmark ${model.name}: baseline=${optimized.baseline.totalQuantity} drums best=${optimized.scenarios[0].totalQuantity} drums\\n`);
     }
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
