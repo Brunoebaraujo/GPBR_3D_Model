@@ -468,6 +468,28 @@ como candidato para impedir regressões de ocupação. Não há garantia de óti
 matemático; os testes validam colisões, suporte geométrico integral, limites
 dimensionais e pesos conhecidos nos modelos MB5/MB6.
 
+
+### Baldes cilíndricos BD: fileiras alternadas em grade circular
+
+A partir deste upgrade, BD 10 KG e BD 20 KG são considerados **discos
+circulares** no plano de apoio; a busca compara malhas quadradas e grades
+triangulares/hexagonais alternando fileiras, em ambos os eixos e com variações
+de composição. A distância real entre centros é validada usando a soma dos
+raios, preservando a folga horizontal selecionada. As caixas e o BD 20 L
+(embalagem retangular) continuam ocupando envelopes retangulares; quando
+misturados com tambores, são posicionados conservadoramente fora dos
+envelopes retangulares de segurança dos tambores. O apoio dos baldes
+continua limitado a no máximo três unidades idênticas e alinhadas
+verticalmente, observando a altura disponível.
+
+**Benchmark geométrico de referência**: no MB5 (1090 × 1437 mm internos),
+o BD 20 KG (Ø303 × 426 mm) comporta 12 posições em uma grade quadrada
+e 15 posições com fileiras alternadas. Cabem 2 camadas por altura,
+correspondendo a 24 ou 30 tambores, respectivamente, antes de limitar pelo
+peso bruto ou disponibilidade. Este número **não é uma aprovação de carga**
+até confirmar que os 303 mm são o maior diâmetro externo do balde e
+validar empilhamento/estabilidade e pesos com a Petronas.
+
 ### Limitações geométricas e operacionais
 
 O algoritmo de múltiplos SKUs usa partição de espaços retangulares **disjuntos**
