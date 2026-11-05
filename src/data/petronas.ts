@@ -16,6 +16,10 @@ export interface PetronasSku {
  * As quantidades nas gaiolas são histórico de referência, NÃO capacidades Goodpack.
  * Nenhum peso bruto foi fornecido; preenchimento do peso pertence à simulação.
  */
+/** BD (baldes) can be stacked only with the same SKU, with at most three units in a vertical column. */
+export const MAX_BD_STACK_LAYERS = 3;
+export const isPetronasBd = (skuId: string): boolean => skuId.startsWith('bd');
+
 export const PETRONAS_SKUS: PetronasSku[] = [
   { id: 'cx24x1', label: 'CX 24×1 (24 frascos de 1 L)', kind: 'block', dimensions: { width: 476, depth: 357, height: 310 }, color: '#2878cb', cageQuantities: { cage32: 18, cage48: 30, cage114: 24 } },
   { id: 'cx12x1', label: 'CX 12×1 (12 frascos de 1 L)', kind: 'block', dimensions: { width: 352, depth: 232, height: 223 }, color: '#0b9b8b', cageQuantities: { cage32: 30, cage48: 65, cage114: 52 } },
