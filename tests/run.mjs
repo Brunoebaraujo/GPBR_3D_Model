@@ -911,7 +911,8 @@ try {
             const bounds = getPackingObjectBounds(obj);
             if (bounds.minZ < 0.001) continue;
             assert.ok(scenario.objects.some(base => {
-              if (base.id === obj.id || base.type === 'cylinder') return false;
+              if (base.id === obj.id) return false;
+              if (base.type === 'cylinder' && !(obj.type === 'cylinder' && base.sourceObjectId === obj.sourceObjectId)) return false;
               const support = getPackingObjectBounds(base);
               return Math.abs(support.maxZ - bounds.minZ) < 0.001
                 && support.minX <= bounds.minX + 0.001 && support.maxX >= bounds.maxX - 0.001
@@ -935,6 +936,70 @@ try {
         assert.ok(scenario.knownWeightKg <= container.maxPayloadKg + 1e-6);
         assert.ok(scenario.counts.cx24x1 <= 9 && scenario.counts.bd20l <= 11 && scenario.counts.cx12x1 <= 10);
         assert.ok(validateFit(scenario.objects, container).fits);
+      }
+    }
+  });
+
+  const { searchUprightLayout } = await load('utils/petronasSearch.js');
+  test('Petronas BD pails stack up to 3 aligned layers for all BD SKUs, without tilt', () => {
+    const testCases = [
+      ['bd10kg', 3, 287],
+      ['bd20kg', 2, 426],
+      ['bd20l', 3, 272],
+    ];
+    for (const [skuId, expectedLayers, height] of testCases) {
+      const sku = PETRONAS_SKUS.find(s => s.id === skuId);
+      const { width, depth } = sku.dimensions;
+      const item = {
+        id: skuId, type: sku.kind, dimensions: sku.dimensions,
+        volume: width * depth * height, weight: 10,
+        maxQuantity: null, priority: 0,
+        variants: [{ width, depth, height, rotationZ: 0 }],
+      };
+      const run = (heightMm, stacking, weight = 10, maxQuantity = null) => searchUprightLayout(
+        { width, depth, height: heightMm, maxWeight: 1650 },
+        [{ ...item, weight, maxQuantity }],
+        { spacingMm: 0, allowStacking: stacking, strategy: 'volume', seed: 0 },
+      );
+      const tall = run(2000, true);
+      assert.equal(tall.placements.length, 3, skuId + ' must never exceed three even in a tall container');
+      assert.deepEqual(tall.placements.map(p => p.z), [0, height, height * 2]);
+      assert.ok(tall.placements.every(p => p.x === 0 && p.y === 0 && p.rotationZ === 0));
+      assert.equal(run(981, true).placements.length, expectedLayers, skuId + ' MB6 height check');
+      assert.equal(run(1020, true).placements.length, expectedLayers, skuId + ' MB5 height check');
+      assert.equal(run(2000, false).placements.length, 1, skuId + ' stacking disabled');
+      assert.equal(run(2000, true, 10, 2).placements.length, 2, skuId + ' maximum quantity');
+      assert.equal(run(2000, true, 1000).placements.length, 1, skuId + ' weight cap');
+    }
+  });
+  test('Petronas BD-only and mixed scenarios never put other SKUs on top of BD or exceed three per column', () => {
+    const MB6 = { ...MB5_CONTAINER, name: 'MB6', internalDimensions: { width: 1069, depth: 1187, height: 981 } };
+    for (const container of [MB5_CONTAINER, MB6]) {
+      for (const ids of [['bd10kg'], ['bd20kg'], ['bd20l'], ['bd10kg', 'cx24x05', 'bd20kg'], ['bd20l', 'cx12x1']]) {
+        const selected = ids.map(skuId => ({ skuId, maxQuantity: null, grossWeightKg: 10 }));
+        const result = optimizeMultiSkuNesting(container, selected, { spacingMm: 0, allowStacking: true });
+        assert.ok(result.scenarios.length > 0);
+        for (const scenario of result.scenarios) {
+          assert.ok(validateFit(scenario.objects, container).fits, 'BD collision: ' + ids.join('+'));
+          for (const bd of scenario.objects.filter(o => o.sourceObjectId?.startsWith('bd'))) {
+            assert.ok(bd.keepTopUp && isTopUp(bd), 'BD must be vertical');
+            const bounds = getPackingObjectBounds(bd);
+            // The only piece allowed directly above a bucket is the same SKU
+            // with the same footprint and no lateral offset.
+            const topNeighbors = scenario.objects.filter(other => {
+              if (other.id === bd.id) return false;
+              const b = getPackingObjectBounds(other);
+              return Math.abs(bounds.maxZ - b.minZ) < 0.001
+                && Math.abs(other.position.x - bd.position.x) < 0.001
+                && Math.abs(other.position.y - bd.position.y) < 0.001;
+            });
+            assert.ok(topNeighbors.every(o => o.sourceObjectId === bd.sourceObjectId), 'Different SKU on BD');
+            const sameColumn = scenario.objects.filter(other => other.sourceObjectId === bd.sourceObjectId
+              && Math.abs(other.position.x - bd.position.x) < 0.001
+              && Math.abs(other.position.y - bd.position.y) < 0.001);
+            assert.ok(sameColumn.length <= 3, 'BD column higher than three');
+          }
+        }
       }
     }
   });
