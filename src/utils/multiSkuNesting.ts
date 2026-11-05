@@ -2,6 +2,7 @@ import type { ContainerSpec, DimensionsMm, PackingObject, RotationDeg } from '..
 import { PETRONAS_SKUS, isPetronasBd, MAX_BD_STACK_LAYERS, type PetronasSku } from '../data/petronas';
 import { getRotatedBoundingBox } from './boundingBox';
 import { searchUprightLayout, type SearchItem, type SearchResult, type SearchStrategy } from './petronasSearch';
+import { circularPatterns, searchCircularPailLayout } from './petronasCirclePacking';
 
 export interface PetronasSelection {
   skuId: string;
@@ -269,7 +270,7 @@ const arrangementKey = (scenario: MultiSkuScenario) => {
     .join('|');
 };
 
-/** Run 64 deterministic search permutations, plus the four previous greedy
+/** Run 64 deterministic rectangular permutations plus circular-lattice searches for BD, and four previous greedy
  * heuristics as a lower-bound reference. Keep top 5 distinct SKU/orientation
  * mixes; a legacy winner is never discarded in favour of a worse layout.
  */
@@ -317,6 +318,20 @@ export const optimizeMultiSkuNesting = (
       candidates.push(fromSearch(search, container, entries, options, strategy, seed));
     }
   }
+  const patterns = circularPatterns(items);
+  patterns.forEach((pattern, index) => {
+    const search = searchCircularPailLayout(
+      { width, depth, height, maxWeight: container.maxPayloadKg }, items,
+      { spacingMm: options.spacingMm, allowStacking: options.allowStacking }, pattern,
+    );
+    const candidate = fromSearch(search, container, entries, options, 'volume', index + 100);
+    candidates.push({
+      ...candidate,
+      id: `circle-${index}-${pattern.primarySkuId}`,
+      name: `${pattern.stagger ? 'Fileiras alternadas' : 'Fileiras alinhadas'} · ${pattern.primarySkuId.toUpperCase()}`,
+      description: `Empacotamento circular ${pattern.stagger ? 'hexagonal' : 'retangular'} em ${pattern.axis.toUpperCase()}, com até 3 camadas BD por posição. Diâmetros reais são usados na checagem de colisões.`,
+    });
+  });
   candidates.sort((a, b) => b.volumePercent - a.volumePercent || b.totalQuantity - a.totalQuantity);
   const unique = new Set<string>();
   const scenarios: MultiSkuScenario[] = [];
@@ -332,7 +347,7 @@ export const optimizeMultiSkuNesting = (
     ...scenarios[0],
     name: `Melhor encontrado · ${scenarios[0].name}`,
   };
-  return { scenarios, baseline, attempts: 64, uprightOnly: true };
+  return { scenarios, baseline, attempts: 64 + patterns.length, uprightOnly: true };
 };
 
 export const createMultiSkuScenarios = (
