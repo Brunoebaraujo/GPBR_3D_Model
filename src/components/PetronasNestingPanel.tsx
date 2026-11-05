@@ -109,7 +109,7 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
           <input type="number" min="0" max="100" step="1" value={options.spacingMm}
             onChange={event => patchOptions({ spacingMm: Math.min(100, Math.max(0, Number(event.target.value) || 0)) })} />
         </label>
-        <label className="checkbox-field"><input type="checkbox" checked={options.allowStacking} onChange={event => patchOptions({ allowStacking: event.target.checked })} />Empilhar caixas em camadas (simulação geométrica)</label>
+        <label className="checkbox-field"><input type="checkbox" checked={options.allowStacking} onChange={event => patchOptions({ allowStacking: event.target.checked })} />Empilhar caixas e baldes BD (até 3 camadas)</label>
         <p className="muted"><strong>Topo sempre para cima:</strong> apenas rotações horizontais de 0° e 90°. <strong>Baldes BD: no máximo 3 camadas do mesmo SKU</strong> (se a altura útil permitir), sem outras embalagens por cima. O empilhamento exige apoio geométrico integral; resistência e movimentação não são certificadas.</p>
       </div>
 
