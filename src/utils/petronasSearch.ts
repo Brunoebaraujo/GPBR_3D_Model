@@ -1,3 +1,5 @@
+import { isPetronasBd, MAX_BD_STACK_LAYERS } from '../data/petronas';
+
 /**
  * Petronas two-stage packing search.
  *
@@ -114,7 +116,11 @@ const availableCount = (
   stacking: boolean,
 ) => {
   if (variant.height > freeHeight + EPS) return 0;
-  let count = stacking && item.type !== 'cylinder' ? Math.floor((freeHeight + EPS) / variant.height) : 1;
+  let count = stacking
+    ? (isPetronasBd(item.id)
+      ? Math.min(MAX_BD_STACK_LAYERS, Math.floor((freeHeight + EPS) / variant.height))
+      : item.type === 'cylinder' ? 1 : Math.floor((freeHeight + EPS) / variant.height))
+    : 1;
   count = Math.min(count, MAX_PACKAGES - usedObjects);
   if (item.maxQuantity !== null) count = Math.min(count, item.maxQuantity - counts[item.id]);
   if (item.weight > 0) count = Math.min(count, Math.floor((maxWeight - usedWeight + EPS) / item.weight));
@@ -235,12 +241,14 @@ export const searchUprightLayout = (
     stacks.push({
       rect: { x: px, y: py, w: variant.width, d: variant.depth },
       top: count * variant.height,
-      supported: item.type !== 'cylinder' && options.allowStacking,
+      // BD columns may contain up to three identical buckets, but do not
+      // support other SKUs placed above their top surface.
+      supported: !isPetronasBd(item.id) && item.type !== 'cylinder' && options.allowStacking,
     });
     free = splitMaxRects(free, { x, y, w: reservedW, d: reservedD });
   }
 
-  // Stage 2: reclaim headroom above SHORTER columns, but never over drums.
+  // Stage 2: reclaim headroom above SHORTER CX columns, never over BD buckets.
   // Each topper lies fully inside ONE supported rectangular column footprint.
   if (options.allowStacking && result.length < MAX_PACKAGES) {
     stacks.sort((a, b) => (H - b.top) * b.rect.w * b.rect.d - (H - a.top) * a.rect.w * a.rect.d);
@@ -251,7 +259,8 @@ export const searchUprightLayout = (
       for (let step = 0; step < 24 && topFree.length && result.length < MAX_PACKAGES; step++) {
         const choice = choose(
           topFree, items,
-          (item, variant) => availableCount(item, variant, freeHeight, counts, weight, maxWeight, result.length, true),
+          (item, variant) => isPetronasBd(item.id) ? 0
+            : availableCount(item, variant, freeHeight, counts, weight, maxWeight, result.length, true),
           counts, occupiedBySku, options.strategy, options.seed + 13, spacing, containerVolume, W, D,
         );
         if (!choice) break;

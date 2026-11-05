@@ -440,7 +440,7 @@ O editor **Personalizado** anterior permanece separado e inalterado.
 | BD 20 L | 398 × 272 × 272 | Envelope retangular |
 | CX 24×1 KG | **Não informado** | Não selecionável |
 
-Os diâmetros Ø270 e Ø303 foram informados como **diâmetros superiores**.
+**Regra BD (baldes):** até **3 camadas de baldes idênticos** alinhados verticalmente quando o empilhamento está ativado, limitado também pela altura interna e carga útil do MB5/MB6. Não há caixas ou outros SKUs sobre os baldes. Assim, BD 10 KG (287 mm de altura) admite geometricamente 3 camadas; BD 20 KG (426 mm) admite apenas 2 camadas no MB5/MB6; BD 20 L (272 mm) admite 3 camadas. Sem o modo de empilhamento, todos permanecem no piso. A resistência real da embalagem deve ser validada pela Petronas.\n\nOs diâmetros Ø270 e Ø303 foram informados como **diâmetros superiores**.
 É necessário confirmar o maior diâmetro externo para que o envelope seja
 conservador. As quantidades históricas em gaiolas 1,20 × 1,20 (32 e 48),
 1,14 × 1,14 e 0,90 × 0,90 estão armazenadas separadamente como referências,
@@ -458,7 +458,7 @@ ordens e quatro objetivos diferentes. Cada tentativa usa **MaxRects 2D**
 (regiões livres máximas) no piso e constrói pilhas verticais de caixas iguais.
 Depois tenta preencher o espaço sobre colunas retangulares mais baixas,
 limitando cada nova embalagem à superfície da coluna de suporte (sem balanço
-lateral). Tambores não recebem outros produtos por cima. A busca não simula
+lateral). Tambores BD suportam apenas outros baldes idênticos alinhados, até 3 camadas; nenhuma caixa é colocada acima deles. A busca não simula
 capacidade física de empilhamento ou deformação.
 
 A interface mostra as cinco melhores **composições distintas de SKU/orientação**,

@@ -81,7 +81,7 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
                 <strong>{sku.label}</strong>
                 <button type="button" className="petronas-remove" title="Remover produto" aria-label={`Remover ${sku.label}`} onClick={() => updateSelected(selected.filter(value => value.skuId !== sku.id))}>×</button>
               </div>
-              <p className="muted">{d.width} × {d.depth} × {d.height} mm{sku.kind === 'cylinder' ? ' · Cilindro vertical' : ''}</p>
+              <p className="muted">{d.width} × {d.depth} × {d.height} mm{sku.id.startsWith('bd') ? ' · BD: até 3 camadas do mesmo produto' : ''}{sku.kind === 'cylinder' ? ' · Cilindro vertical' : ''}</p>
               <div className="petronas-fields">
                 <label>Máximo de unid.
                   <input aria-label={`Máximo ${sku.label}`} type="number" min="1" step="1" placeholder="Livre" value={item.maxQuantity ?? ''} onChange={event => patchSelected(sku.id, { maxQuantity: event.target.value === '' ? null : Math.max(1, Math.floor(Number(event.target.value) || 1)) })} />
@@ -109,8 +109,8 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
           <input type="number" min="0" max="100" step="1" value={options.spacingMm}
             onChange={event => patchOptions({ spacingMm: Math.min(100, Math.max(0, Number(event.target.value) || 0)) })} />
         </label>
-        <label className="checkbox-field"><input type="checkbox" checked={options.allowStacking} onChange={event => patchOptions({ allowStacking: event.target.checked })} />Empilhar caixas em camadas (simulação geométrica)</label>
-        <p className="muted"><strong>Topo sempre para cima:</strong> apenas rotações horizontais de 0° e 90°. Tambores permanecem verticais e não recebem outras embalagens sobre eles. O empilhamento exige apoio geométrico integral; resistência e movimentação não são certificadas.</p>
+        <label className="checkbox-field"><input type="checkbox" checked={options.allowStacking} onChange={event => patchOptions({ allowStacking: event.target.checked })} />Empilhar caixas e baldes BD (até 3 camadas)</label>
+        <p className="muted"><strong>Topo sempre para cima:</strong> apenas rotações horizontais de 0° e 90°. <strong>Baldes BD: no máximo 3 camadas do mesmo SKU</strong> (se a altura útil permitir), sem outras embalagens por cima. O empilhamento exige apoio geométrico integral; resistência e movimentação não são certificadas.</p>
       </div>
 
       <div className="section">
