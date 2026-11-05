@@ -1,5 +1,5 @@
 import type { ContainerSpec, DimensionsMm, PackingObject, RotationDeg } from '../types';
-import { PETRONAS_SKUS, type PetronasSku } from '../data/petronas';
+import { PETRONAS_SKUS, isPetronasBd, MAX_BD_STACK_LAYERS, type PetronasSku } from '../data/petronas';
 import { getRotatedBoundingBox } from './boundingBox';
 import { searchUprightLayout, type SearchItem, type SearchResult, type SearchStrategy } from './petronasSearch';
 
@@ -32,7 +32,7 @@ export interface MultiSkuOptimization {
   uprightOnly: true;
 }
 type Strategy = 'volume' | 'balanced' | 'priority' | 'count';
-interface Space { x: number; y: number; z: number; w: number; d: number; h: number; supported: boolean }
+interface Space { x: number; y: number; z: number; w: number; d: number; h: number; supported: boolean; bdStack?: { skuId: string; layers: number } }
 interface Variant { rotation: RotationDeg; size: DimensionsMm }
 interface Entry { sku: PetronasSku; request: PetronasSelection; variants: Variant[]; volume: number; index: number }
 interface Candidate { entry: Entry; variant: Variant; score: number }
@@ -78,18 +78,18 @@ const makeVariants = (sku: PetronasSku): Variant[] => {
 const fits = (space: Space, size: DimensionsMm) =>
   size.width <= space.w + EPS && size.depth <= space.d + EPS && size.height <= space.h + EPS;
 
-const place = (space: Space, size: DimensionsMm, spacingMm: number, canStack: boolean): Space[] => {
+const place = (space: Space, size: DimensionsMm, spacingMm: number, canStack: boolean, bdStack?: { skuId: string; layers: number }): Space[] => {
   // Três espaços disjuntos: lateral, fundo e acima da peça. A região superior
   // não avança sobre a folga lateral e não existe sobre tambores.
   const reservedW = Math.min(space.w, size.width + spacingMm);
   const reservedD = Math.min(space.d, size.depth + spacingMm);
   const remaining: Space[] = [
-    { x: space.x + reservedW, y: space.y, z: space.z, w: space.w - reservedW, d: space.d, h: space.h, supported: space.supported },
-    { x: space.x, y: space.y + reservedD, z: space.z, w: reservedW, d: space.d - reservedD, h: space.h, supported: space.supported },
+    { x: space.x + reservedW, y: space.y, z: space.z, w: space.w - reservedW, d: space.d, h: space.h, supported: space.supported, bdStack: space.bdStack },
+    { x: space.x, y: space.y + reservedD, z: space.z, w: reservedW, d: space.d - reservedD, h: space.h, supported: space.supported, bdStack: space.bdStack },
   ];
   if (canStack) remaining.push({
     x: space.x, y: space.y, z: space.z + size.height,
-    w: size.width, d: size.depth, h: space.h - size.height, supported: true,
+    w: size.width, d: size.depth, h: space.h - size.height, supported: true, bdStack,
   });
   return remaining.filter(region => region.w > EPS && region.d > EPS && region.h > EPS);
 };
@@ -112,6 +112,10 @@ const runStrategy = (
     const space = free.shift()!;
     const choices: Candidate[] = [];
     for (const entry of entries) {
+      // A bucket can only rest on the floor or on an identical BD bucket.
+      // A BD column never supports a different SKU.
+      if (space.bdStack && entry.sku.id !== space.bdStack.skuId) continue;
+      if (space.z > EPS && isPetronasBd(entry.sku.id) && !space.bdStack) continue;
       if (entry.request.maxQuantity !== null && counts[entry.sku.id] >= entry.request.maxQuantity) continue;
       const weight = entry.request.grossWeightKg ?? 0;
       if (knownWeightKg + weight > container.maxPayloadKg + EPS) continue;
@@ -162,7 +166,13 @@ const runStrategy = (
     occupiedVolume += entry.volume;
     allocatedVolumes[sku.id] += entry.volume;
     knownWeightKg += entry.request.grossWeightKg ?? 0;
-    free.push(...place(space, size, spacing, options.allowStacking && sku.kind !== 'cylinder'));
+    const isBd = isPetronasBd(sku.id);
+    const layers = isBd ? (space.bdStack?.layers ?? 0) + 1 : 0;
+    const canStack = options.allowStacking && (isBd
+      ? layers < MAX_BD_STACK_LAYERS
+      : sku.kind !== 'cylinder');
+    free.push(...place(space, size, spacing, canStack,
+      isBd ? { skuId: sku.id, layers } : undefined));
   }
   const warnings: string[] = [];
   if (!knownAllWeights) warnings.push('Carga útil NÃO validada: informe o peso bruto de cada SKU.');
