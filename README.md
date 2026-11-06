@@ -469,6 +469,22 @@ matemático; os testes validam colisões, suporte geométrico integral, limites
 dimensionais e pesos conhecidos nos modelos MB5/MB6.
 
 
+### Quantidades mínimas obrigatórias e aviso de VR
+
+Cada SKU adicionado ao **Catálogo Petronas** começa com **mínimo = 1 unidade**;
+esse valor é editável no cartão do produto (0 significa opcional). O limite
+máximo é separado. O otimizador reserva posições para os produtos obrigatórios
+antes de maximizar a ocupação, executa suas buscas de arranjo e **mostra
+somente cenários que satisfazem todos os mínimos**. Se não houver arranjo
+válido encontrado, mostra uma mensagem explícita; situações evidentemente
+impossíveis (mínimo maior que máximo, volume ou peso mínimo excedente)
+recebem mensagens específicas. A busca é heurística: uma busca malsucedida
+não é prova matemática de impossibilidade.
+
+Na seção Produto, o botão/aviso de VR flutuante agora fica na lateral
+**inferior esquerda**, sobre a área livre do menu, sem encobrir os resultados
+do nesting no painel direito.
+
 ### Baldes cilíndricos BD: fileiras alternadas em grade circular
 
 A partir deste upgrade, BD 10 KG e BD 20 KG são considerados **discos

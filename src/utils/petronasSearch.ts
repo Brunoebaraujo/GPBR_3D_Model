@@ -24,6 +24,7 @@ export interface SearchItem {
   volume: number;
   weight: number;
   maxQuantity: number | null;
+  minimumQuantity?: number;
   priority: number;
   variants: SearchVariant[];
 }
@@ -227,12 +228,27 @@ export const searchUprightLayout = (
     occupiedBySku[item.id] += item.volume * count;
   };
 
-  // Stage 1: full floor, mixed upright columns, MaxRects remaining floor.
+  // Reserve floor positions for EVERY requested SKU before maximizing volume.
+  // Rotated ordering across 64 seeds prevents a single greedy item choice from
+  // consistently consuming the space needed by the last selected product.
+  const minimum = (item: SearchItem) => Math.max(0, Math.floor(item.minimumQuantity ?? 1));
+  const hasUnmet = () => items.some(item => counts[item.id] < minimum(item));
   for (let step = 0; step < MAX_FLOOR_STACKS && free.length && result.length < MAX_PACKAGES; step++) {
+    const reserving = hasUnmet();
+    const ordered = reserving ? items.map((item, index) => ({
+      ...item, priority: (index + options.seed) % items.length,
+    })) : items;
     const choice = choose(
-      free, items,
-      (item, variant) => availableCount(item, variant, H, counts, weight, maxWeight, result.length, options.allowStacking),
-      counts, occupiedBySku, options.strategy, options.seed, spacing, containerVolume, W, D,
+      free, ordered,
+      (item, variant) => {
+        if (reserving && counts[item.id] >= minimum(item)) return 0;
+        const available = availableCount(item, variant, H, counts, weight, maxWeight, result.length, options.allowStacking);
+        // Some seeds reserve exactly the minimum; others build full columns.
+        return reserving && items.length > 1 && options.seed % 3 === 0
+          ? Math.min(available, minimum(item) - counts[item.id]) : available;
+      },
+      counts, occupiedBySku, reserving ? 'priority' : options.strategy,
+      options.seed, spacing, containerVolume, W, D,
     );
     if (!choice) break;
     const { item, variant, count, x, y, reservedW, reservedD } = choice;
@@ -257,11 +273,16 @@ export const searchUprightLayout = (
       if (!stack.supported || freeHeight <= EPS) continue;
       let topFree: Rect[] = [{ ...stack.rect }];
       for (let step = 0; step < 24 && topFree.length && result.length < MAX_PACKAGES; step++) {
+        const reserving = hasUnmet();
         const choice = choose(
           topFree, items,
-          (item, variant) => isPetronasBd(item.id) ? 0
-            : availableCount(item, variant, freeHeight, counts, weight, maxWeight, result.length, true),
-          counts, occupiedBySku, options.strategy, options.seed + 13, spacing, containerVolume, W, D,
+          (item, variant) => {
+            if (isPetronasBd(item.id) || (reserving && counts[item.id] >= minimum(item))) return 0;
+            const available = availableCount(item, variant, freeHeight, counts, weight, maxWeight, result.length, true);
+            return reserving ? Math.min(available, minimum(item) - counts[item.id]) : available;
+          },
+          counts, occupiedBySku, reserving ? 'priority' : options.strategy,
+          options.seed + 13, spacing, containerVolume, W, D,
         );
         if (!choice) break;
         const { item, variant, count, x, y, reservedW, reservedD } = choice;

@@ -902,7 +902,7 @@ try {
         assert.equal(result.uprightOnly, true);
         assert.ok(result.attempts >= 64, 'Circular search expands rectangular permutations');
         assert.ok(result.scenarios.length > 0 && result.scenarios.length <= 5);
-        assert.ok(result.scenarios[0].volumePercent >= result.baseline.volumePercent - 1e-9);
+        if (result.baseline) assert.ok(result.scenarios[0].volumePercent >= result.baseline.volumePercent - 1e-9);
         for (const scenario of result.scenarios) {
           const validation = validateFit(scenario.objects, model);
           assert.ok(validation.fits, model.name + '/' + scenario.name + ' ' + validation.warnings.slice(0, 3).join(', '));
@@ -920,7 +920,7 @@ try {
             }), 'Unsupported raised item ' + obj.id);
           }
         }
-        process.stdout.write(`Petronas benchmark ${model.name}: ${config.selected.join('+')} baseline=${result.baseline.volumePercent.toFixed(2)}% best=${result.scenarios[0].volumePercent.toFixed(2)}% (${result.scenarios[0].totalQuantity} pcs)\\n`);
+        process.stdout.write(`Petronas benchmark ${model.name}: ${config.selected.join('+')} baseline=${result.baseline?.volumePercent.toFixed(2) ?? 'n/a'}% best=${result.scenarios[0].volumePercent.toFixed(2)}% (${result.scenarios[0].totalQuantity} pcs)\\n`);
       }
     }
   });
@@ -1080,8 +1080,60 @@ try {
         assert.ok(fit.fits, 'Round BD collision: ' + fit.warnings.join(', '));
         assert.ok(scenario.objects.every(o => o.keepTopUp && isTopUp(o)));
       }
-      process.stdout.write(`Circular BD benchmark ${model.name}: baseline=${optimized.baseline.totalQuantity} drums best=${optimized.scenarios[0].totalQuantity} drums\\n`);
+      process.stdout.write(`Circular BD benchmark ${model.name}: baseline=${optimized.baseline?.totalQuantity ?? 'n/a'} drums best=${optimized.scenarios[0].totalQuantity} drums\\n`);
     }
+  });
+
+  test('Petronas default minimum requires all three selected SKUs in every displayed scenario', () => {
+    const skus = [
+      { skuId: 'cx24x1', maxQuantity: null, grossWeightKg: 24 },
+      { skuId: 'cx12x1', maxQuantity: null, grossWeightKg: 12 },
+      { skuId: 'cx4x4', maxQuantity: null, grossWeightKg: 16 },
+    ];
+    for (const model of [MB5_CONTAINER, { ...MB5_CONTAINER, name: 'MB6', internalDimensions: { width: 1069, depth: 1187, height: 981 } }]) {
+      const optimized = optimizeMultiSkuNesting(model, skus, { spacingMm: 0, allowStacking: true });
+      assert.equal(optimized.error, null);
+      assert.ok(optimized.scenarios.length >= 1, 'At least one feasible candidate for 3 SKUs');
+      for (const candidate of optimized.scenarios) {
+        for (const { skuId } of skus) assert.ok(candidate.counts[skuId] >= 1, skuId + ' omitted in ' + candidate.name);
+        assert.ok(validateFit(candidate.objects, model).fits, 'Invalid 3-SKU candidate');
+      }
+      process.stdout.write(`Petronas mandatory 3 SKU mix ${model.name}: ${optimized.scenarios[0].totalQuantity} pieces; ${skus.map(s => s.skuId + ':' + optimized.scenarios[0].counts[s.skuId]).join(', ')}\\n`);
+    }
+  });
+  test('Petronas custom minimum quantity is enforced and impossible constraints return diagnostics', () => {
+    const o = { spacingMm: 0, allowStacking: true };
+    const minMix = [
+      { skuId: 'cx24x1', minQuantity: 2, maxQuantity: 5, grossWeightKg: 24 },
+      { skuId: 'cx12x1', minQuantity: 3, maxQuantity: 8, grossWeightKg: 12 },
+      { skuId: 'cx4x4', minQuantity: 1, maxQuantity: 3, grossWeightKg: 16 },
+    ];
+    const valid = optimizeMultiSkuNesting(MB5_CONTAINER, minMix, o);
+    assert.equal(valid.error, null);
+    assert.ok(valid.scenarios.length > 0);
+    for (const scenario of valid.scenarios) {
+      assert.ok(scenario.counts.cx24x1 >= 2 && scenario.counts.cx12x1 >= 3 && scenario.counts.cx4x4 >= 1);
+      assert.ok(scenario.counts.cx24x1 <= 5 && scenario.counts.cx12x1 <= 8 && scenario.counts.cx4x4 <= 3);
+      assert.ok(validateFit(scenario.objects, MB5_CONTAINER).fits);
+    }
+    const invalidMax = optimizeMultiSkuNesting(MB5_CONTAINER,
+      [{ skuId: 'cx4x4', minQuantity: 5, maxQuantity: 2, grossWeightKg: 16 }], o);
+    assert.equal(invalidMax.scenarios.length, 0);
+    assert.match(invalidMax.error, /mínimo.*maior que o máximo/i);
+    const tooHeavy = optimizeMultiSkuNesting(MB5_CONTAINER,
+      [{ skuId: 'cx4x4', minQuantity: 2, maxQuantity: null, grossWeightKg: 1000 }], o);
+    assert.equal(tooHeavy.scenarios.length, 0);
+    assert.match(tooHeavy.error, /acima da capacidade/i);
+    const physicallyTooMany = optimizeMultiSkuNesting(MB5_CONTAINER,
+      [{ skuId: 'cx4x4', minQuantity: 100, maxQuantity: null, grossWeightKg: null }], o);
+    assert.equal(physicallyTooMany.scenarios.length, 0);
+    assert.match(physicallyTooMany.error, /volumes mínimos/i);
+    const optional = optimizeMultiSkuNesting(MB5_CONTAINER, [
+      { skuId: 'cx24x1', minQuantity: 1, maxQuantity: 12, grossWeightKg: 24 },
+      { skuId: 'cx4x4', minQuantity: 0, maxQuantity: 2, grossWeightKg: 16 },
+    ], o);
+    assert.equal(optional.error, null);
+    assert.ok(optional.scenarios.every(scenario => scenario.counts.cx24x1 >= 1));
   });
   process.stdout.write(`\n${passed} calculation tests passed.\n`);
 } finally { rmSync(output,{recursive:true,force:true}); }
