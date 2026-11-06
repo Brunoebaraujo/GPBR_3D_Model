@@ -7,6 +7,7 @@ import { circularPatterns, searchCircularPailLayout } from './petronasCirclePack
 export interface PetronasSelection {
   skuId: string;
   maxQuantity: number | null;
+  minQuantity?: number;
   grossWeightKg: number | null;
 }
 export interface MultiSkuOptions {
@@ -31,6 +32,7 @@ export interface MultiSkuOptimization {
   baseline: MultiSkuScenario | null;
   attempts: number;
   uprightOnly: true;
+  error: string | null;
 }
 type Strategy = 'volume' | 'balanced' | 'priority' | 'count';
 interface Space { x: number; y: number; z: number; w: number; d: number; h: number; supported: boolean; bdStack?: { skuId: string; layers: number } }
@@ -274,6 +276,33 @@ const arrangementKey = (scenario: MultiSkuScenario) => {
  * heuristics as a lower-bound reference. Keep top 5 distinct SKU/orientation
  * mixes; a legacy winner is never discarded in favour of a worse layout.
  */
+const requiredCount = (request: PetronasSelection): number =>
+  Math.max(0, Math.floor(request.minQuantity ?? 1));
+
+const meetsMinimums = (scenario: MultiSkuScenario, entries: Entry[]): boolean =>
+  entries.every(entry => (scenario.counts[entry.sku.id] ?? 0) >= requiredCount(entry.request));
+
+const minimumError = (container: ContainerSpec, entries: Entry[]): string | null => {
+  const { width, depth, height } = container.internalDimensions;
+  for (const entry of entries) {
+    const minimum = requiredCount(entry.request);
+    const maximum = entry.request.maxQuantity;
+    if (maximum !== null && maximum < minimum) {
+      return `${entry.sku.label}: mínimo de ${minimum} unidades maior que o máximo de ${maximum}.`;
+    }
+    if (minimum > 0 && !entry.variants.some(v => v.size.width <= width && v.size.depth <= depth && v.size.height <= height)) {
+      return `${entry.sku.label} não cabe em pé no volume útil de ${container.name}.`;
+    }
+  }
+  const minCount = entries.reduce((total, entry) => total + requiredCount(entry.request), 0);
+  if (minCount > MAX_OBJECTS) return `A soma dos mínimos (${minCount}) ultrapassa o limite de ${MAX_OBJECTS} peças por simulação.`;
+  const minVolume = entries.reduce((total, entry) => total + requiredCount(entry.request) * entry.volume, 0);
+  if (minVolume > width * depth * height + EPS) return 'A soma dos volumes mínimos ultrapassa a capacidade volumétrica do Goodpack.';
+  const weight = entries.reduce((sum, entry) => sum + requiredCount(entry.request) * (entry.request.grossWeightKg ?? 0), 0);
+  if (weight > container.maxPayloadKg + EPS) return `Os mínimos exigem ${weight.toLocaleString('pt-BR')} kg, acima da capacidade útil de ${container.maxPayloadKg} kg.`;
+  return null;
+};
+
 export const optimizeMultiSkuNesting = (
   container: ContainerSpec,
   selected: PetronasSelection[],
@@ -281,13 +310,23 @@ export const optimizeMultiSkuNesting = (
 ): MultiSkuOptimization => {
   const entries: Entry[] = selected.flatMap((request, index) => {
     const sku = PETRONAS_SKUS.find(item => item.id === request.skuId);
-    if (!sku?.dimensions || request.maxQuantity !== null && request.maxQuantity <= 0) return [];
+    if (!sku?.dimensions) return [];
     return [{ sku, request, variants: makeVariants(sku), volume: exactVolume(sku), index }];
   });
-  if (!entries.length) return { scenarios: [], baseline: null, attempts: 0, uprightOnly: true };
+  if (!entries.length) return {
+    scenarios: [], baseline: null, attempts: 0, uprightOnly: true,
+    error: selected.length ? 'Há produto sem dimensões cadastradas; não é possível calcular seu mínimo.' : null,
+  };
+  if (entries.length !== selected.length) return {
+    scenarios: [], baseline: null, attempts: 0, uprightOnly: true,
+    error: 'Não é possível simular todos os SKUs: há produto selecionado sem dimensões.',
+  };
+  const error = minimumError(container, entries);
+  if (error) return { scenarios: [], baseline: null, attempts: 0, uprightOnly: true, error };
   const legacy = STRATEGIES.map(s => runStrategy(s.id, container, entries, options))
+    .filter(scenario => meetsMinimums(scenario, entries))
     .sort((a, b) => b.volumePercent - a.volumePercent || b.totalQuantity - a.totalQuantity);
-  const baseline = legacy[0];
+  const baseline = legacy[0] ?? null;
   const { width, depth, height } = container.internalDimensions;
   const items: SearchItem[] = entries.map(entry => ({
     id: entry.sku.id,
@@ -296,6 +335,7 @@ export const optimizeMultiSkuNesting = (
     volume: entry.volume,
     weight: entry.request.grossWeightKg ?? 0,
     maxQuantity: entry.request.maxQuantity,
+    minimumQuantity: requiredCount(entry.request),
     priority: entry.index,
     variants: entry.variants.map(variant => ({
       width: variant.size.width,
@@ -305,9 +345,9 @@ export const optimizeMultiSkuNesting = (
     })).filter((variant, index, variants) =>
       variants.findIndex(v => v.width === variant.width && v.depth === variant.depth && v.height === variant.height) === index),
   }));
-  const candidates: MultiSkuScenario[] = [
-    { ...baseline, id: 'legacy-baseline', name: 'Algoritmo anterior', description: 'Referência preservada para que a nova busca não piore o resultado.' },
-  ];
+  const candidates: MultiSkuScenario[] = baseline ? [
+    { ...baseline, id: 'legacy-baseline', name: 'Algoritmo anterior', description: 'Referência que também atende todos os mínimos por SKU.' },
+  ] : [];
   for (const strategy of ['volume', 'balanced', 'priority', 'count'] as const) {
     for (let seed = 0; seed < 16; seed++) {
       const search = searchUprightLayout(
@@ -336,6 +376,7 @@ export const optimizeMultiSkuNesting = (
   const unique = new Set<string>();
   const scenarios: MultiSkuScenario[] = [];
   for (const scenario of candidates) {
+    if (!meetsMinimums(scenario, entries)) continue;
     const key = arrangementKey(scenario);
     if (unique.has(key)) continue;
     unique.add(key);
@@ -347,7 +388,10 @@ export const optimizeMultiSkuNesting = (
     ...scenarios[0],
     name: `Melhor encontrado · ${scenarios[0].name}`,
   };
-  return { scenarios, baseline, attempts: 64 + patterns.length, uprightOnly: true };
+  return {
+    scenarios, baseline, attempts: 64 + patterns.length, uprightOnly: true,
+    error: scenarios.length ? null : 'Nenhum cenário válido encontrado com as quantidades mínimas informadas. Reduza os mínimos, a folga ou ajuste os SKUs.',
+  };
 };
 
 export const createMultiSkuScenarios = (
