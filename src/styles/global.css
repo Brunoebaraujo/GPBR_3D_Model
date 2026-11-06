@@ -573,3 +573,8 @@ button:disabled { opacity:.45; cursor:not-allowed; }
 .petronas-comparison strong { font-size: 13px; color: #145b78; }
 .petronas-breakdown > div > span:nth-child(2) { display: flex; flex-direction: column; }
 .petronas-breakdown small { color: #70838c; font-size: 10px; margin-top: 2px; }
+
+/* Petronas required mix: minimum / maximum per SKU and explicit infeasibility. */
+.petronas-fields label:last-child { grid-column: 1 / -1; }
+.petronas-infeasible { border: 1px solid #b8c1c9; border-radius: 8px; background: #fff; padding: 12px; font-size: 12px; line-height: 1.55; color: #36444f; }
+.petronas-infeasible strong { display: block; margin-bottom: 4px; }
