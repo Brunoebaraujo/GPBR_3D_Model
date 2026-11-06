@@ -17,8 +17,8 @@ const pretty = (n: number, decimals = 1) =>
 
 export function PetronasNestingPanel({ container, onShowScenario, onClearScenario }: Props) {
   const [selected, setSelected] = useState<PetronasSelection[]>([
-    { skuId: 'cx24x1', maxQuantity: null, grossWeightKg: null },
-    { skuId: 'bd20l', maxQuantity: null, grossWeightKg: null },
+    { skuId: 'cx24x1', minQuantity: 1, maxQuantity: null, grossWeightKg: null },
+    { skuId: 'bd20l', minQuantity: 1, maxQuantity: null, grossWeightKg: null },
   ]);
   const [options, setOptions] = useState<MultiSkuOptions>({
     spacingMm: 0, allowStacking: true,
@@ -55,7 +55,7 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
     <aside className="panel properties-panel petronas-panel">
       <p className="eyebrow">Petronas · Catálogo de embalagens</p>
       <h2>Nesting misto MB5 / MB6</h2>
-      <p className="muted">Selecione múltiplos SKUs. O algoritmo testa diferentes ordens e rotações horizontais, sem deitar as embalagens. As quantidades nas gaiolas são apenas referência.</p>
+      <p className="muted">Selecione múltiplos SKUs. Cada produto tem mínimo padrão de 1 unidade; o algoritmo busca arranjos que atendam todos os mínimos, sem deitar as embalagens.</p>
 
       <div className="section">
         <h3>1. Seleção de produtos</h3>
@@ -63,7 +63,7 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
           <span>Adicionar SKU</span>
           <select aria-label="Adicionar produto Petronas" value="" onChange={event => {
             const id = event.target.value;
-            if (id && !selected.some(item => item.skuId === id)) updateSelected([...selected, { skuId: id, maxQuantity: null, grossWeightKg: null }]);
+            if (id && !selected.some(item => item.skuId === id)) updateSelected([...selected, { skuId: id, minQuantity: 1, maxQuantity: null, grossWeightKg: null }]);
           }}>
             <option value="">Selecionar no catálogo…</option>
             {PETRONAS_SKUS.map(sku =>
@@ -83,6 +83,9 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
               </div>
               <p className="muted">{d.width} × {d.depth} × {d.height} mm{sku.id.startsWith('bd') ? ' · BD: até 3 camadas do mesmo produto' : ''}{sku.kind === 'cylinder' ? ' · Cilindro vertical' : ''}</p>
               <div className="petronas-fields">
+                <label>Mínimo de unid.
+                  <input aria-label={`Mínimo ${sku.label}`} type="number" min="0" step="1" value={item.minQuantity ?? 1} onChange={event => patchSelected(sku.id, { minQuantity: Math.max(0, Math.floor(Number(event.target.value) || 0)) })} />
+                </label>
                 <label>Máximo de unid.
                   <input aria-label={`Máximo ${sku.label}`} type="number" min="1" step="1" placeholder="Livre" value={item.maxQuantity ?? ''} onChange={event => patchSelected(sku.id, { maxQuantity: event.target.value === '' ? null : Math.max(1, Math.floor(Number(event.target.value) || 1)) })} />
                 </label>
@@ -105,6 +108,7 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
 
       <div className="section">
         <h3>2. Condições do arranjo</h3>
+        <p className="muted">Mínimo padrão = 1 por produto. Mínimo 0 torna o SKU opcional; mínimos maiores que o máximo ou que a capacidade do Goodpack não geram cenário.</p>
         <label className="field"><span>Folga horizontal (mm)</span>
           <input type="number" min="0" max="100" step="1" value={options.spacingMm}
             onChange={event => patchOptions({ spacingMm: Math.min(100, Math.max(0, Number(event.target.value) || 0)) })} />
@@ -115,7 +119,8 @@ export function PetronasNestingPanel({ container, onShowScenario, onClearScenari
 
       <div className="section">
         <h3>3. Cenários calculados · {container.name}</h3>
-        <p className="muted">{optimization.attempts} permutações testadas · até 5 combinações distintas · sem mudança da face superior.</p>
+        <p className="muted">{optimization.attempts} permutações testadas · até 5 combinações distintas · cada cenário atende os mínimos configurados.</p>
+        {optimization.error && <p className="petronas-infeasible" role="status"><strong>Nenhuma solução válida.</strong> {optimization.error}</p>}
         {baseline && <div className="petronas-comparison"><div><span>Algoritmo anterior</span><strong>{pretty(baseline.volumePercent)}%</strong></div><div><span>Melhor resultado encontrado</span><strong>{pretty(scenarios[0]?.volumePercent ?? 0)}%</strong></div><div><span>Ganho de ocupação</span><strong>+{pretty(Math.max(0, (scenarios[0]?.volumePercent ?? 0) - baseline.volumePercent))} p.p.</strong></div></div>}
         {scenarios.map(scenario => <div className={`petronas-scenario ${activeScenario === scenario.id ? 'active' : ''}`} key={scenario.id}>
           <div className="petronas-scenario-title"><strong>{scenario.name}</strong><strong>{pretty(scenario.volumePercent)}%</strong></div>
