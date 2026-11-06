@@ -244,7 +244,7 @@ export const searchUprightLayout = (
         if (reserving && counts[item.id] >= minimum(item)) return 0;
         const available = availableCount(item, variant, H, counts, weight, maxWeight, result.length, options.allowStacking);
         // Some seeds reserve exactly the minimum; others build full columns.
-        return reserving && options.seed % 3 === 0
+        return reserving && items.length > 1 && options.seed % 3 === 0
           ? Math.min(available, minimum(item) - counts[item.id]) : available;
       },
       counts, occupiedBySku, reserving ? 'priority' : options.strategy,
