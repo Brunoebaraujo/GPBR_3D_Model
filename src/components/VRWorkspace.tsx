@@ -1,3 +1,4 @@
+import { AssemblyEnvironment } from './AssemblyEnvironment';
 import { LocomotionTutorial } from './LocomotionTutorial';
 import { useLocomotionTutorial } from './useLocomotionTutorial';
 import { TUTORIAL_STEPS } from '../utils/locomotionTutorial';
@@ -177,7 +178,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
     </aside>
     <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status"><span className="vr-mode-label">{module === 'desktop' ? 'DESKTOP · MOUSE' : 'VR · HEADSET'}</span>{lab.message}</div><div className="vr-mouse-hint">{hint}</div>
       <Canvas camera={{ position: [2.4, 2.2, 3.5], fov: 48 }}><color attach="background" args={['#101e2a']} /><ambientLight intensity={1.8} /><directionalLight position={[3, 7, 4]} intensity={3} />
-        {assembly && <gridHelper args={[10, 40, '#34626d', '#253b48']} />}<OrbitControls makeDefault enabled={!presenting && !dragging} target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.8} maxDistance={9} />
+        {assembly && <AssemblyEnvironment presenting={presenting} />}{assembly && <gridHelper args={[10, 40, '#34626d', '#253b48']} />}<OrbitControls makeDefault enabled={!presenting && !dragging} target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.8} maxDistance={9} />
 
         <CameraView request={view} presenting={presenting} />
         {!assembly && data?.scene}
