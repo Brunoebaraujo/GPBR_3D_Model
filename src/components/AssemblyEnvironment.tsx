@@ -3,9 +3,14 @@ import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CanvasTexture, Group, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { STORAGE_STACKS, WAREHOUSE } from '../utils/assemblyWarehouse';
+import { boxHeight, createBox } from '../utils/mb6Assembly';
+import { Crate } from './MB6Parts';
 
 type Vec = [number, number, number];
 const ignoreRay = () => undefined;
+const ignoreAction = () => undefined;
+const backgroundInteraction = { enabled: false, busy: ignoreAction, hint: ignoreAction };
+const CLOSED_STACK = { x: 0, z: -9.5, count: 4 };
 const palette = { wall: '#d9deda', metal: '#7e929b', panel: '#bac4c4', dark: '#233c4b', blue: '#08449e', white: '#eef1ec', concrete: '#9b9c94', yellow: '#e0b847', light: '#ffffff', wood: '#b98c54', shadow: '#626d6a' };
 type Surface = keyof typeof palette;
 
@@ -33,6 +38,11 @@ function warehouseGeometry() {
     for (const side of [-1, 1]) {
       box('white', [.25, h, .25], [side * 8.8, h / 2, z]);
       box('yellow', [.32, .8, .32], [side * 8.8, .4, z]);
+      // Slim metal edge trims make each white structural post read clearly
+      // against the similarly light warehouse wall behind it.
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        box('metal', [.018, h, .018], [side * 8.8 + sx * .112, h / 2, z + sz * .112]);
+      }
     }
     for (const x of [-4.5, 0, 4.5]) {
       box('metal', [.025, .55, .025], [x, h - .65, z]);
@@ -46,6 +56,7 @@ function warehouseGeometry() {
     for (const z of [-8, -4, 0, 4, 8]) box('metal', [.46, .39, .04], [x, h - .58, z]);
   }
   for (const stack of STORAGE_STACKS) {
+    if (stack.x === CLOSED_STACK.x && stack.z === CLOSED_STACK.z) continue;
     box('shadow', [1.23, .008, 1.33], [stack.x, -.001, stack.z]);
     for (let level = 0; level < stack.levels; level++) {
       const x = stack.x, y = level * 1.076, z = stack.z;
@@ -94,6 +105,24 @@ function signTexture(title: string, subtitle: string, dark: boolean) {
   const texture = new CanvasTexture(canvas); texture.colorSpace = SRGBColorSpace; return texture;
 }
 
+function goodpackLogoTexture() {
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 200;
+  const ctx = canvas.getContext('2d')!;
+  const texture = new CanvasTexture(canvas); texture.colorSpace = SRGBColorSpace;
+  const image = new Image();
+  image.onload = () => {
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      if (pixels.data[i] > 246 && pixels.data[i + 1] > 246 && pixels.data[i + 2] > 246) pixels.data[i + 3] = 0;
+    }
+    ctx.putImageData(pixels, 0, 0);
+    texture.needsUpdate = true;
+  };
+  image.src = `${import.meta.env.BASE_URL}vr-environment/goodpack-logo.png`;
+  return texture;
+}
+
 function concreteTexture() {
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
   const ctx = canvas.getContext('2d')!, pixels = ctx.createImageData(256, 256);
@@ -110,11 +139,16 @@ function concreteTexture() {
 
 /** Continuous metric warehouse; decorative geometry never intercepts crate rays. */
 export function AssemblyEnvironment({ presenting, revision = 0 }: { presenting: boolean; revision?: number }) {
-  const elapsed = useRef(10), scan = useRef<Group>(null);
+  const elapsed = useRef(10), scan = useRef<Group>(null), closedStack = useRef<Group>(null);
   const reveal = useMemo(() => ({ value: 8 }), []);
+  const closedBoxes = useMemo(() => Array.from({ length: CLOSED_STACK.count }, (_, level) => {
+    const box = createBox(100 + level);
+    box.pose = { x: CLOSED_STACK.x, y: level * (boxHeight(box) + .012), z: CLOSED_STACK.z, yaw: 0 };
+    return box;
+  }), []);
   const resources = useMemo(() => {
     const floor = concreteTexture();
-    const logo = signTexture('GOODPACK', 'N E T W O R K  @  W O R K', false);
+    const logo = goodpackLogoTexture();
     const system = signTexture('REUSE. RETURN.', 'THE GLOBAL REUSABLE IBC NETWORK', true);
     const exit = signTexture('SAÍDA', 'EXPEDIÇÃO  /  DISPATCH', true);
     const prepare = (material: MeshStandardMaterial) => {
@@ -131,7 +165,7 @@ export function AssemblyEnvironment({ presenting, revision = 0 }: { presenting: 
       map: key === 'concrete' ? floor : null,
       emissive: key === 'light' ? '#ffffff' : '#000000', emissiveIntensity: key === 'light' ? 1.4 : 0,
     })) }));
-    const signs = [logo, system, exit].map(map => prepare(new MeshStandardMaterial({ map, roughness: .9 })));
+    const signs = [logo, system, exit].map((map, index) => prepare(new MeshStandardMaterial({ map, roughness: .9, transparent: index === 0, alphaTest: index === 0 ? .02 : 0 })));
     return { meshes, signs, textures: [floor, logo, system, exit] };
   }, [reveal]);
   useEffect(() => () => {
@@ -145,13 +179,17 @@ export function AssemblyEnvironment({ presenting, revision = 0 }: { presenting: 
   useFrame((_, delta) => {
     elapsed.current += Math.min(delta, .05);
     reveal.value = Math.min(8, elapsed.current * 1.8);
+    if (closedStack.current) closedStack.current.scale.y = Math.min(1, reveal.value / 1.35);
     if (scan.current) { scan.current.visible = reveal.value < 7.3; scan.current.position.y = reveal.value; }
   });
   return <group name="continuous-warehouse" dispose={null}>
     {resources.meshes.map(({ key, geometry, material }) => geometry && <mesh key={key} geometry={geometry} material={material} raycast={ignoreRay} />)}
-    <mesh position={[0, 4.8, -10.87]} material={resources.signs[0]} raycast={ignoreRay}><planeGeometry args={[5.2, 1.3]} /></mesh>
+    <mesh position={[0, 4.8, -10.87]} material={resources.signs[0]} raycast={ignoreRay}><planeGeometry args={[3.2, 3.2]} /></mesh>
     <mesh position={[-8.87, 4.5, 0]} rotation={[0, Math.PI / 2, 0]} material={resources.signs[1]} raycast={ignoreRay}><planeGeometry args={[4.8, 1.2]} /></mesh>
     <mesh position={[1.8, 4.85, 10.87]} rotation={[0, Math.PI, 0]} material={resources.signs[2]} raycast={ignoreRay}><planeGeometry args={[3.2, .8]} /></mesh>
+    <group ref={closedStack}>
+      {closedBoxes.map(box => <Crate key={box.id} box={box} selected={false} tool="assemble" dispatch={ignoreAction} onPose={(_, pose) => pose} interaction={backgroundInteraction} />)}
+    </group>
     <group ref={scan}>
       {[-1, 1].map(side => <group key={side}>
         <mesh position={[side * 8.97, 0, 0]} raycast={ignoreRay}><boxGeometry args={[.025, .025, 22]} /><meshBasicMaterial color="#37dfff" toneMapped={false} /></mesh>
