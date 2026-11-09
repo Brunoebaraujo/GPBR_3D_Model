@@ -2,6 +2,7 @@ import { MB6, type Assembly } from './mb6Assembly';
 import type { Pose } from './mb6Assembly';
 import type { Point3 } from './xrInteraction';
 import { cargoBodies, sceneLength, type RoadVehicle } from './roadLoading';
+import { warehousePosition } from './assemblyWarehouse';
 export type Exploration = { key: string; mode: 'walk' | 'fly'; vehicle?: RoadVehicle; view: 'entry' | 'inside' | 'outside' | 'overview'; revision: number };
 export function explorationStart(config: Exploration): Pose {
   const v = config.vehicle, length = v ? sceneLength(v) / 1000 : 3;
@@ -15,9 +16,13 @@ export function explorationStart(config: Exploration): Pose {
 // Ground is the cargo-floor datum. Flight changes the rig, never the user's eye height.
 export function constrainExploration(pose: Pose, viewer: Point3, config: Exploration): Pose {
   const v = config.vehicle;
-  if (!v) return pose;
   const xOffset = viewer.x * Math.cos(pose.yaw) + viewer.z * Math.sin(pose.yaw);
   const zOffset = -viewer.x * Math.sin(pose.yaw) + viewer.z * Math.cos(pose.yaw);
+  if (!v) {
+    if (!config.key.startsWith('vr:')) return pose;
+    const bounded = warehousePosition(pose.x + xOffset, pose.z + zOffset);
+    return { ...pose, x: bounded.x - xOffset, z: bounded.z - zOffset, y: 0 };
+  }
   const halfWidth = Math.max(...cargoBodies(v).map(b => b.width)) / 2000 + 2;
   const halfLength = sceneLength(v) / 2000 + 2;
   const clamp = (n: number, limit: number) => Math.max(-limit, Math.min(limit, n));

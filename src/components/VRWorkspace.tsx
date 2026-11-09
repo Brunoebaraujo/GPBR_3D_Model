@@ -17,14 +17,15 @@ import './vr.css';
 import { unlockAssemblyAudio } from '../utils/assemblyAudio';
 
 type Vec = [number, number, number];
-type ViewRequest = { kind: 'front' | 'back' | 'overview' | 'corner'; pose: Pose; corner?: number };
+type ViewRequest = { kind: 'front' | 'back' | 'overview' | 'corner' | 'warehouse'; pose: Pose; corner?: number };
 function CameraView({ request, presenting }: { request: ViewRequest | null; presenting: boolean }) {
   const { camera, controls } = useThree();
   useEffect(() => {
     if (!request || presenting || !controls) return;
     const orbit = controls as OrbitControlsImpl;
     const { pose, kind } = request;
-    if (kind === 'overview') { camera.position.set(3.4, 2.9, 5.3); orbit.target.set(0, 0.8, 0); }
+    if (kind === 'warehouse') { camera.position.set(0, 2.2, 8); orbit.target.set(0, 1.8, -4); }
+    else if (kind === 'overview') { camera.position.set(3.4, 2.9, 5.3); orbit.target.set(0, 0.8, 0); }
     else {
       const direction = kind === 'front' ? 1 : -1;
       const c = request.corner ?? 0;
@@ -96,6 +97,7 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
   const [view, setView] = useState<ViewRequest | null>(null);
   const [renderer, setRenderer] = useState<WebGLRenderer | null>(null);
   const [presenting, setPresenting] = useState(false);
+  const [environmentRevision, setEnvironmentRevision] = useState(0);
   useEffect(() => { if (presenting && activeModule === 'vr') tutorialOffer(); }, [presenting, activeModule, tutorialOffer]);
   const [xrStatus, setXRStatus] = useState('Verificando headset…');
   const [supported, setSupported] = useState(false);
@@ -174,11 +176,12 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
       <h2>Alinhamento dos pés</h2><small>Eleve, aproxime, ajuste X em −20 mm três vezes e teste. Gire para experimentar um encaixe incompatível.</small>
       {(['x', 'y', 'z'] as const).map(axis => <div className="vr-row" key={axis}><span>{axis.toUpperCase()} {Math.round(selected.pose[axis] * 1000)} mm</span>{[-0.02, 0.02].map(d => <button key={d} aria-label={`${axis.toUpperCase()} ${d > 0 ? '+' : '−'}20 mm`} onClick={() => move(axis, d)}>{d > 0 ? '+' : '−'}20</button>)}</div>)}
       </>}<button onClick={() => dispatch({ type: 'reset' })}>Reiniciar laboratório</button>
+      <div className="vr-tools"><button onClick={() => setView({ kind: 'warehouse', pose: { ...selected.pose } })}>Ver galpão</button><button onClick={() => setEnvironmentRevision(n => n + 1)}>Reconstruir ambiente</button></div>
       <p className="vr-note">Ficha: recolhida 224 mm; tampa 10,6 kg. A folga visual da porta 4 usa curso ilustrativo de 50 mm; o envelope recolhido exibido é maior que a cota nominal. Alavancas reproduzem a sequência visual do vídeo. Cotas dos fechos e encaixes não constam na ficha e continuam aproximadas.</p>
     </aside>
     <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status"><span className="vr-mode-label">{module === 'desktop' ? 'DESKTOP · MOUSE' : 'VR · HEADSET'}</span>{lab.message}</div><div className="vr-mouse-hint">{hint}</div>
       <Canvas camera={{ position: [2.4, 2.2, 3.5], fov: 48 }}><color attach="background" args={['#101e2a']} /><ambientLight intensity={1.8} /><directionalLight position={[3, 7, 4]} intensity={3} />
-        {assembly && <AssemblyEnvironment presenting={presenting} />}{assembly && <gridHelper args={[10, 40, '#34626d', '#253b48']} />}<OrbitControls makeDefault enabled={!presenting && !dragging} target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.8} maxDistance={9} />
+        {assembly && <AssemblyEnvironment presenting={presenting} revision={environmentRevision} />}<OrbitControls makeDefault enabled={!presenting && !dragging} target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.8} maxDistance={15} />
 
         <CameraView request={view} presenting={presenting} />
         {!assembly && data?.scene}
