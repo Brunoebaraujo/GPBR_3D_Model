@@ -10,7 +10,7 @@ type Vec = [number, number, number];
 const ignoreRay = () => undefined;
 const ignoreAction = () => undefined;
 const backgroundInteraction = { enabled: false, busy: ignoreAction, hint: ignoreAction };
-const CLOSED_STACK = { x: 0, z: -9.5, count: 4 };
+const CLOSED_STACK = { x: 0, z: -9.5, count: 3 };
 const palette = { wall: '#d9deda', metal: '#7e929b', panel: '#bac4c4', dark: '#233c4b', blue: '#08449e', white: '#eef1ec', concrete: '#9b9c94', yellow: '#e0b847', light: '#ffffff', wood: '#b98c54', shadow: '#626d6a' };
 type Surface = keyof typeof palette;
 
@@ -38,10 +38,11 @@ function warehouseGeometry() {
     for (const side of [-1, 1]) {
       box('white', [.25, h, .25], [side * 8.8, h / 2, z]);
       box('yellow', [.32, .8, .32], [side * 8.8, .4, z]);
-      // Slim metal edge trims make each white structural post read clearly
-      // against the similarly light warehouse wall behind it.
+      // Exposed corner strokes outline the post faces so their edges read as
+      // structural framing instead of seams in the warehouse wall.
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        box('metal', [.018, h, .018], [side * 8.8 + sx * .112, h / 2, z + sz * .112]);
+        box('metal', [.018, h, .018], [side * 8.8 + sx * .106, h / 2, z + sz * .133]);
+        box('metal', [.018, h, .018], [side * 8.8 + sx * .133, h / 2, z + sz * .106]);
       }
     }
     for (const x of [-4.5, 0, 4.5]) {
@@ -143,6 +144,10 @@ export function AssemblyEnvironment({ presenting, revision = 0 }: { presenting: 
   const reveal = useMemo(() => ({ value: 8 }), []);
   const closedBoxes = useMemo(() => Array.from({ length: CLOSED_STACK.count }, (_, level) => {
     const box = createBox(100 + level);
+    box.walls = [true, true, true, true];
+    box.locks = [true, true, true, true];
+    box.leverRaised = [true, true, true, true];
+    box.bolts = [true, true, true, true];
     box.pose = { x: CLOSED_STACK.x, y: level * (boxHeight(box) + .012), z: CLOSED_STACK.z, yaw: 0 };
     return box;
   }), []);
