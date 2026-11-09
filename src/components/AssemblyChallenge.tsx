@@ -95,9 +95,11 @@ export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>v
         <TouchButton text="SALVAR" position={[.46,-.29,.025]} width={.39} height={.13} disabled={!name.trim()} onPress={save}/>
       </group></group></group>,scene)}
     </group>
-    <Label text="PLACAR · MONTAGEM MB6" position={[0,2.45,-2.3]} width={3.2} height={.25}/>
-    {scores.length===0 && <Label text="Complete as duas caixas e registre seu tempo" position={[0,2.1,-2.3]} width={3.2} height={.2}/>}
-    {scores.map((s,i)=><Label key={i} text={`${i+1}. ${s.name}    ${formatTime(s.ms)}`} position={[0,2.1-i*.18,-2.3]} width={3.2} height={.16}/>)}
+    <group position={[8.95,0,3.6]} rotation={[0,-Math.PI/2,0]}>
+      <Label text="PLACAR · MONTAGEM MB6" position={[0,5.15,0]} width={3.2} height={.25}/>
+      {scores.length===0 && <Label text="Complete as duas caixas e registre seu tempo" position={[0,4.8,0]} width={3.2} height={.2}/>}
+      {scores.map((s,i)=><Label key={i} text={`${i+1}. ${s.name}    ${formatTime(s.ms)}`} position={[0,4.8-i*.18,0]} width={3.2} height={.16}/>)}
+    </group>
     {complete && <Completed/>}
 
   </group>;
