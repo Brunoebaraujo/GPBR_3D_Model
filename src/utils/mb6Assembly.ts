@@ -6,7 +6,8 @@ export const MB6 = { w: MB6_CONTAINER.externalDimensions.width / 1000, d: MB6_CO
 export const WALL_NUMBERS = [4, 1, 3, 2] as const;
 export const wallGrabPoint = (index: number) => {
   const height = MB6.h - .035 - WALL_PIVOT_Y[index];
-  return { x: 0, y: index === 0 ? height / 2 + .01 : height, z: index === 0 ? .023 : .025 };
+  // All four doors use the same centered lifting handle as door 4.
+  return { x: 0, y: height / 2 + .01, z: .023 };
 };
 export const WALL_NAMES = ['Frente', 'Direita', 'Fundo', 'Esquerda'];
 // Indices remain clockwise for corner/bolt adjacency. Assembly is a separate order.

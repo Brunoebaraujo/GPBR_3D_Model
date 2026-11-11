@@ -843,10 +843,13 @@ try {
     assert.equal(held.angle,-.2);assert.equal(held.lift,WALL_SEATING_TRAVEL);
     assert.equal(wallMotion(2,-.2,0,0,true,false,.02).lift,0);
   });
-  test('Door numbering changes labels without changing assembly order; door 4 grip is centered', () => {
+  test('Door numbering preserves assembly order and all four doors use a centered grip', () => {
     assert.deepEqual([...WALL_NUMBERS],[4,1,3,2]);
     assert.deepEqual(ASSEMBLY_ORDER.map(i=>WALL_NUMBERS[i]),[4,3,2,1]);
-    for(let i=0;i<4;i++) {const p=wallGrabPoint(i),height=MB6.h-.035-WALL_PIVOT_Y[i];assert.equal(p.x,0);assert.equal(p.y,i===0?height/2+.01:height);}
+    for (const index of WALL_NUMBERS.keys()) {
+      const height = MB6.h - .035 - WALL_PIVOT_Y[index];
+      assert.deepEqual(wallGrabPoint(index), { x: 0, y: height / 2 + .01, z: .023 });
+    }
   });
 
   const { createMultiSkuScenarios, optimizeMultiSkuNesting } = await load('utils/multiSkuNesting.js');

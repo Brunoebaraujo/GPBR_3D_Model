@@ -140,7 +140,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
     <group ref={ref} position={[0, index === 0 ? WALL_SEATING_TRAVEL : 0, 0]} rotation={[-Math.PI / 2, 0, 0]} userData={wallData}>
       {[-1, 1].map(side => <Part key={side} position={[side * (width / 2 - 0.035), 0.013, 0]} size={[0.024, 0.04, 0.014]} />)}
       <group {...gesture.events} userData={{ activate: () => act({ type: 'wall', index }) }}>
-        {index === 0 && <Suspense fallback={null}><DoorPull height={height} /></Suspense>}
+        <Suspense fallback={null}><DoorPull height={height} /></Suspense>
         {index % 2 === 1 && [-1, 1].map(side => <group key={`guide-${side}`} position={[side * (MB6.d / 2 - MB6.inset), height + .01, -.03]}>
           {/* Preserve the stacking centers; bridge inward from the wall to the guide. */}
           <Part position={[0, -.0075, 0]} size={[.045, .015, .028]} />
