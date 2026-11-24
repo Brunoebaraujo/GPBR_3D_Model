@@ -10,19 +10,21 @@ import { playAssemblySound } from '../utils/assemblyAudio';
 
 type Vec = [number, number, number];
 export type MouseTool = 'assemble' | 'translate' | 'rotate';
-type Interaction = { enabled: boolean; busy: (value: boolean) => void; hint: (text: string) => void };
+type Interaction = { enabled: boolean; desktopWalk?: boolean; busy: (value: boolean) => void; hint: (text: string) => void };
 
 // Capture the pointer so a gesture can end outside the original mesh.
 function useGesture(interaction: Interaction, hint: string, tap: () => void, drag: (dx: number, dy: number) => void) {
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
   const latest = useRef(interaction); latest.current = interaction;
   const [hovered, setHovered] = useState(false);
+  const callbacks = useRef({ tap, drag }); callbacks.current = { tap, drag };
+  const desktopGesture = interaction.desktopWalk ? { hint, hover: setHovered, finish: (dx: number, dy: number) => { if (Math.hypot(dx, dy) < 6) callbacks.current.tap(); else callbacks.current.drag(dx, dy); } } : undefined;
   useEffect(() => {
     const cancel = () => { if (start.current) { start.current = null; latest.current.busy(false); } };
     window.addEventListener('blur', cancel); window.addEventListener('pointercancel', cancel); window.addEventListener('pointerup', cancel);
     return () => { cancel(); window.removeEventListener('blur', cancel); window.removeEventListener('pointercancel', cancel); window.removeEventListener('pointerup', cancel); };
   }, []);
-  return { hovered, events: {
+  return { hovered, desktopGesture, events: {
     onPointerOver: (e: ThreeEvent<PointerEvent>) => { if (!interaction.enabled) return; e.stopPropagation(); setHovered(true); interaction.hint(hint); },
     onPointerOut: () => setHovered(false),
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
@@ -88,7 +90,7 @@ function Lever({ index, box, x, height, act, interaction, direction }: { index: 
       playAssemblySound('click'); clickPending.current = false;
     }
   });
-  return <group ref={root} position={[x, height - 0.035, 0.032]} {...gesture.events} userData={{ xrLever: { boxId: box.id, index, direction }, activate: () => operate(raised ? 'lower' : 'lift') }}>
+  return <group ref={root} position={[x, height - 0.035, 0.032]} {...gesture.events} userData={{ desktopGesture: gesture.desktopGesture, xrLever: { boxId: box.id, index, direction }, activate: () => operate(raised ? 'lower' : 'lift') }}>
     <Suspense fallback={<Part position={[0, 0, 0]} size={[0.15, 0.05, 0.014]} />}><LatchSupport direction={direction} /></Suspense>
     <Part position={[direction * 0.085, 0, 0.012]} size={[0.025, 0.045, 0.035]} color="#356b99" />
     <group ref={carriage}>
@@ -139,7 +141,7 @@ function Wall({ index, box, act, interaction }: { index: number; box: Assembly; 
     </group>)}
     <group ref={ref} position={[0, index === 0 ? WALL_SEATING_TRAVEL : 0, 0]} rotation={[-Math.PI / 2, 0, 0]} userData={wallData}>
       {[-1, 1].map(side => <Part key={side} position={[side * (width / 2 - 0.035), 0.013, 0]} size={[0.024, 0.04, 0.014]} />)}
-      <group {...gesture.events} userData={{ activate: () => act({ type: 'wall', index }) }}>
+      <group {...gesture.events} userData={{ desktopGesture: gesture.desktopGesture, activate: () => act({ type: 'wall', index }) }}>
         <Suspense fallback={null}><DoorPull height={height} /></Suspense>
         {index % 2 === 1 && [-1, 1].map(side => <group key={`guide-${side}`} position={[side * (MB6.d / 2 - MB6.inset), height + .01, -.03]}>
           {/* Preserve the stacking centers; bridge inward from the wall to the guide. */}
@@ -178,7 +180,7 @@ function Lid({ box, act, interaction }: { box: Assembly; act: (a: Action) => voi
       playAssemblySound('impact'); impactPending.current = false;
     }
   });
-  return <group ref={ref} position={initialPosition} {...gesture.events} userData={{ activate: () => act({ type: 'lid' }) }}>
+  return <group ref={ref} position={initialPosition} {...gesture.events} userData={{ desktopGesture: gesture.desktopGesture, activate: () => act({ type: 'lid' }) }}>
     <Part position={[0, 0, 0]} size={[MB6.w - 0.12, 0.012, MB6.d - 0.12]} color="#dfe7eb" highlight={gesture.hovered} />
   </group>;
 }
