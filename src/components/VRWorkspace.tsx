@@ -1,4 +1,5 @@
 import { AssemblyEnvironment } from './AssemblyEnvironment';
+import { DesktopWalkControls } from './DesktopWalkControls';
 import { LocomotionTutorial } from './LocomotionTutorial';
 import { useLocomotionTutorial } from './useLocomotionTutorial';
 import { TUTORIAL_STEPS } from '../utils/locomotionTutorial';
@@ -85,12 +86,14 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
   const [flight, setFlight] = useState(false);
   const [viewpoint, setViewpoint] = useState<{ view: Exploration['view']; revision: number }>({ view: 'entry', revision: 0 });
   const visit = (view: Exploration['view']) => setViewpoint(current => ({ view, revision: current.revision + 1 }));
-  const navigate = (next: StudioModule) => { tutorialGo(-2); setPage(0); setFlight(false); visit('entry'); onNavigate(next); };
+  const navigate = (next: StudioModule) => { tutorialGo(-2); setPage(0); setFlight(false); setDesktopWalk(false); visit('entry'); onNavigate(next); };
 
   const [lab, dispatch] = useReducer(reduceLab, undefined, initialLab);
   const [module, setModule] = useState<'desktop' | 'vr'>('desktop');
   const [tool, setTool] = useState<MouseTool>('assemble');
   const [dragging, setDragging] = useState(false);
+  const [desktopWalk, setDesktopWalk] = useState(false);
+  const walking = desktopWalk && activeModule === 'vr' && !presenting;
   const [hint, setHint] = useState('Clique na tampa ou arraste-a para cima para começar.');
   const [corner, setCorner] = useState(0);
   const [page, setPage] = useState(0);
@@ -165,6 +168,8 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
 
     <aside className="vr-panel" hidden={activeModule !== 'vr'}><p className="vr-eyebrow">LOAD STUDIO · MONTAGEM</p><h1>Monte. Trave. Empilhe.</h1><p>MB6 · 1120 × 1220 × 1076 mm</p>
       <div className="vr-module-choice" aria-label="Módulo de interação"><button aria-pressed={module === 'desktop'} onClick={() => { setModule('desktop'); setTool('assemble'); }}>Desktop · Mouse</button><button aria-pressed={module === 'vr'} onClick={() => { setModule('vr'); setTool('assemble'); setHint('Esquerdo vira e avança/recua. Botão X abre a prancheta; direita seleciona.'); }}>VR · Headset</button></div>
+      <div className="vr-tools" aria-label="Navegação no desktop"><button className={walking ? 'vr-primary' : undefined} aria-pressed={walking} onClick={() => { setDesktopWalk(value => !value); setDragging(false); }}>{walking ? 'Voltar à montagem · Mouse' : 'Explorar galpão · WASD'}</button></div>
+      {walking && <p><strong>Exploração em primeira pessoa:</strong> clique no cenário para controlar a visão com o mouse; WASD ou setas para caminhar; Shift para acelerar; Esc para liberar o cursor. Para manipular as caixas, clique em “Voltar à montagem · Mouse”.</p>}
       {module === 'vr' ? <><button className="vr-primary" disabled={!supported || !renderer || pending || presenting} onClick={() => void enter()}>{pending ? 'Conectando…' : 'Entrar em VR'}</button><small>{xrStatus}</small><p>Direito: andar e deslocar para os lados. Esquerdo: virar e também avançar/recuar. Segure o botão X para mostrar a prancheta; aponte com a direita ou selecione com seu analógico para cima/baixo e confirme com o gatilho direito. Para montar paredes, mire, segure gatilho e grip lateral, toque A/B ou X/Y e puxe até o final. Com ambos os gatilhos segurando a caixa, dois pontos azuis fixam a pega. Mova e gire os controles para transladar e girar a caixa, mantendo o alcance. Ferrolhos disponíveis ficam azuis ao apontar. O encaixe alinhado trava automaticamente com click.</p></> : <><h2>Manipular com o mouse</h2><div className="vr-tools">{([['assemble', 'Montar peças'], ['translate', 'Mover caixa'], ['rotate', 'Girar caixa']] as const).map(([value, label]) => <button key={value} aria-pressed={tool === value} onClick={() => { setTool(value); setDragging(false); }}>{label}</button>)}</div><p>{tool === 'assemble' ? 'Clique ou arraste tampa e paredes. Nas alavancas: arraste para cima, na horizontal e para baixo. Arraste o fundo para orbitar; role para aproximar.' : tool === 'translate' ? 'Selecione a caixa e arraste as setas: verde eleva, vermelho e azul alinham no piso. Ao soltar, posições inválidas retornam.' : 'Arraste o arco verde para girar a caixa. A rotação ocorre em passos de 5°.'}</p></>}
       <div className="vr-row">{lab.boxes.map(b => <button key={b.id} aria-pressed={selected.id === b.id} onClick={() => dispatch({ type: 'select', id: b.id })}>Caixa {b.id}</button>)}</div>
       {module === 'desktop' && <div className="vr-tools" aria-label="Vistas da caixa">{([['front', 'Ver frente'], ['back', 'Ver fundo'], ['overview', 'Visão geral']] as const).map(([kind, label]) => <button key={kind} onClick={() => setView({ kind, pose: { ...selected.pose } })}>{label}</button>)}</div>}
@@ -179,14 +184,15 @@ export function VRWorkspace({ activeModule, onNavigate }: { activeModule: Studio
       <div className="vr-tools"><button onClick={() => setView({ kind: 'warehouse', pose: { ...selected.pose } })}>Ver galpão</button><button onClick={() => setEnvironmentRevision(n => n + 1)}>Reconstruir ambiente</button></div>
       <p className="vr-note">Ficha: recolhida 224 mm; tampa 10,6 kg. A folga visual da porta 4 usa curso ilustrativo de 50 mm; o envelope recolhido exibido é maior que a cota nominal. Alavancas reproduzem a sequência visual do vídeo. Cotas dos fechos e encaixes não constam na ficha e continuam aproximadas.</p>
     </aside>
-    <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status"><span className="vr-mode-label">{module === 'desktop' ? 'DESKTOP · MOUSE' : 'VR · HEADSET'}</span>{lab.message}</div><div className="vr-mouse-hint">{hint}</div>
+    <section className="vr-stage" aria-label="Montagem MB6 em 3D"><div className="vr-feedback" role="status"><span className="vr-mode-label">{walking ? 'EXPLORAÇÃO · WASD + MOUSE' : module === 'desktop' ? 'DESKTOP · MOUSE' : 'VR · HEADSET'}</span>{lab.message}</div><div className="vr-mouse-hint">{hint}</div>
       <Canvas camera={{ position: [2.4, 2.2, 3.5], fov: 48 }}><color attach="background" args={['#101e2a']} /><ambientLight intensity={1.8} /><directionalLight position={[3, 7, 4]} intensity={3} />
-        {assembly && <AssemblyEnvironment presenting={presenting} revision={environmentRevision} />}<OrbitControls makeDefault enabled={!presenting && !dragging} target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.8} maxDistance={15} />
+        {assembly && <AssemblyEnvironment presenting={presenting} revision={environmentRevision} />}<OrbitControls makeDefault enabled={!presenting && !dragging && !walking} target={[0, 0.8, 0]} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={0.8} maxDistance={15} />
 
-        <CameraView request={view} presenting={presenting} />
+        <CameraView request={view} presenting={presenting || walking} />
+        <DesktopWalkControls enabled={walking} />
         {!assembly && data?.scene}
         <group visible={assembly}><AssemblyChallenge lab={lab} dispatch={dispatch} /></group>
-        {assembly && lab.boxes.map(b => <Crate key={b.id} box={b} selected={b.id === selected.id} tool={module === 'desktop' ? tool : 'assemble'} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onPose={onPose} interaction={{ enabled: module === 'desktop' && tool === 'assemble', busy: setDragging, hint: setHint }} />)}
+        {assembly && lab.boxes.map(b => <Crate key={b.id} box={b} selected={b.id === selected.id} tool={module === 'desktop' ? tool : 'assemble'} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onPose={onPose} interaction={{ enabled: !walking && module === 'desktop' && tool === 'assemble', busy: setDragging, hint: setHint }} />)}
         {presenting && activeModule === 'vr' && tutorialStep !== -2 && <LocomotionTutorial step={tutorialStep} onStep={tutorialGo} />}
         <XRInteraction onTutorialSample={activeModule === 'vr' ? tutorialReport : undefined} exploration={{ key: `${activeModule}:${data?.vehicle?.kind ?? ''}`, mode: flight ? 'fly' : 'walk', vehicle: activeModule === 'road' ? data?.vehicle : undefined, view: viewpoint.view, revision: viewpoint.revision }} lab={lab} dispatch={action => { if (action.type === 'lever') setCorner(action.index); dispatch(action); }} onRenderer={setRenderer} onPresenting={setPresenting} onHint={setHint}>
           <mesh position={[0, 0, -0.012]}><boxGeometry args={[0.46, 0.80, 0.018]} /><meshStandardMaterial color="#203541" roughness={0.8} /></mesh>
