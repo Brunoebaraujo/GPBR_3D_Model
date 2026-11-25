@@ -453,6 +453,27 @@ try {
   });
   const { initialLab, reduceLab, ready, fitsStack, WALL_NUMBERS, wallGrabPoint, MB6, boxHeight, leverGesture, ASSEMBLY_ORDER, FOLD_ORDER, WALL_PIVOT_Y, WALL_SEATING_TRAVEL, MB6_VISUAL_COLLAPSED, LEVER_FOLDED_PROJECTION, wallMotion } = await load('utils/mb6Assembly.js');
   const operateLever = (state, index) => ['lift', 'slide', 'lower'].reduce((s, step) => reduceLab(s, { type: 'lever', index, step }), state);
+  test('Filling waits for four closed latches, keeps the crate stationary and completes in order', () => {
+    let state = reduceLab(initialLab(), { type: 'start-filling' });
+    assert.equal(state.filling, 'assembly');
+    assert.equal(reduceLab(state, { type: 'advance-filling' }), state);
+    state = reduceLab(state, { type: 'lid' });
+    for (const index of ASSEMBLY_ORDER) state = reduceLab(state, { type: 'wall', index });
+    for (const index of [0, 1, 2]) state = operateLever(state, index);
+    state = reduceLab(state, { type: 'lever', index: 3, step: 'lift' });
+    state = reduceLab(state, { type: 'lever', index: 3, step: 'slide' });
+    assert.equal(state.filling, 'assembly');
+    state = reduceLab(state, { type: 'lever', index: 3, step: 'lower' });
+    assert.equal(state.filling, 'lowering');
+    assert.equal(reduceLab(state, { type: 'lid' }), state);
+    assert.equal(reduceLab(state, { type: 'move', pose: { x: 1, y: 0, z: 0, yaw: 0 } }), state);
+    for (const stage of ['connect', 'filling', 'full', 'cap', 'sealed']) {
+      state = reduceLab(state, { type: 'advance-filling' });
+      assert.equal(state.filling, stage);
+    }
+    assert.equal(state.boxes.length, 1);
+    assert.equal(reduceLab(state, { type: 'reset' }).filling, undefined);
+  });
   const assemble = state => {
     state = reduceLab(state, { type: 'lid' });
     for (const i of ASSEMBLY_ORDER) state = reduceLab(state, { type: 'wall', index: i });

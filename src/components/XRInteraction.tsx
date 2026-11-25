@@ -2,6 +2,7 @@ import type { TutorialSample } from '../utils/locomotionTutorial';
 import { handPose, doorGripHeld, clipboardHeld } from '../utils/handPose';
 import { touchButton, type TouchState } from '../utils/xrTouch';
 import { constrainCrates, explorationStart, constrainExploration, type Exploration } from '../utils/xrNavigation';
+import type { FillingGrab } from './FillingSimulation';
 import { controllerHand } from './controllerHand';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -12,7 +13,7 @@ import { boxGrabCorner, canGrabBox, canOperateLever, rayEndpoint, rayGrabbedPose
 type Props = { onTutorialSample?: (sample: TutorialSample) => void; exploration?: Exploration; lab: Lab; dispatch: (action: Action) => void; onRenderer: (renderer: WebGLRenderer | null) => void; onPresenting: (value: boolean) => void; onHint: (text: string) => void; children: ReactNode };
 type LeverTarget = { boxId: number; index: number; direction: number };
 type Target = { object: Object3D; boxId?: number; lever?: LeverTarget; activate?: () => void; panel: boolean; wall?: { boxId: number; index: number }; boxObject?: Object3D; hit: Vector3 };
-type Hand = { source: XRInputSource | null; down: boolean; target: Target | null; anchor: Vector3; phase: LeverPhase; slideDirection: number; tracked: boolean; wallStart: number; radius: number; pendingWall: boolean };
+type Hand = { source: XRInputSource | null; down: boolean; target: Target | null; anchor: Vector3; phase: LeverPhase; slideDirection: number; tracked: boolean; wallStart: number; radius: number; pendingWall: boolean; filling?: FillingGrab };
 type Grab = { id: number; object: Object3D; origin: Pose; start: [Point3, Point3]; candidate: Pose; distances: [number, number]; anchors: [Vector3, Vector3] };
 
 // The viewer and controllers share a rig; the clipboard follows the left grip while held.
@@ -72,7 +73,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         const box = latest.current.lab.boxes.find(b => b.id === held.id);
         applyPose(held.object, box?.pose ?? held.origin);
       }
-      hands.forEach(h => { restoreWall(h); h.down = false; h.target = null; h.pendingWall=false; });
+      hands.forEach(h => { restoreWall(h); h.filling?.release(); h.filling = undefined; h.down = false; h.target = null; h.pendingWall=false; });
     };
     const hands: Hand[] = [0, 1].map(() => ({ source: null, down: false, target: null, anchor: new Vector3(), phase: 'lift', slideDirection: 1, tracked: false, wallStart: 0, radius: .5, pendingWall:false }));
     feedback.current = () => {
@@ -109,6 +110,8 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
         let wall: Target['wall'], boxObject: Object3D | undefined;
         for (let p: Object3D | null = hit.object; p; p = p.parent) {
           if (p.userData.xrTouch) return null;
+          if (p.userData.xrIgnoreRay) break;
+          if (p.userData.xrFillingGrab) return { object:p, panel:false, hit:hit.point.clone() };
           if (!activate && typeof p.userData.activate === 'function') activate = p.userData.activate;
           if (p.userData.xrWall && !lever) { wall = p.userData.xrWall; object = p; }
           if (p.userData.xrLever) { lever = p.userData.xrLever; object = p; }
@@ -126,6 +129,18 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       h.pendingWall=false; h.down = true;
       if (board.current?.visible && source.handedness === 'right' && menuIndex >= 0) { actions()[menuIndex]?.userData.activate(); return; }
       const target = aim(i); h.target = target;
+      const fillingStage = latest.current.lab.filling;
+      if (fillingStage === 'cap' && source.handedness === 'right' && !target?.panel) {
+        const cap = scene.getObjectByName('mb6-filling-hand-cap');
+        h.filling = cap?.userData.xrFillingGrab?.(point(i));
+        return;
+      }
+      if (target?.object.userData.xrFillingGrab && !hands.some(other => other.filling)) {
+        const start = point(i);
+        if (start.distanceTo(target.hit) <= .40) h.filling = target.object.userData.xrFillingGrab(start);
+        else hint('Aproxime a mão do terminal antes de segurá-lo.');
+        return;
+      }
       if (!target) return;
       if (target.panel) { if (source.handedness === 'right' && !hands.some((other, j) => j !== i && other.down)) target.activate?.(); return; }
       if (target.lever && !latest.current.lab.boxes.some(b => b.id === target.boxId && canGrabBox(latest.current.lab,b))) {
@@ -185,7 +200,7 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const connected = (event: { data: XRInputSource }) => { hands[i].source = event.data; };
       const disconnected = () => { clear(true); hands[i].source = null; hands[i].tracked = false; };
       const down = (event: { data: XRInputSource }) => begin(i, event.data);
-      const up = () => { if (grab) clear(false); restoreWall(hands[i]); hands[i].down = false; hands[i].target = null; hands[i].pendingWall=false; };
+      const up = () => { if (grab) clear(false); restoreWall(hands[i]); hands[i].filling?.release(); hands[i].filling = undefined; hands[i].down = false; hands[i].target = null; hands[i].pendingWall=false; };
       controller.addEventListener('connected', connected); controller.addEventListener('disconnected', disconnected);
       controller.addEventListener('selectstart', down); controller.addEventListener('selectend', up);
       return { beam, marker, connected, disconnected, down, up };
@@ -200,6 +215,8 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       hint('Esquerda: virar e avançar/recuar. Segure X para abrir a prancheta.');
     };
     const end = () => {
+      const cap = scene.getObjectByName('mb6-filling-hand-cap');
+      if (cap) cap.visible = false;
       projectedHands.forEach(hand=>{hand.root.visible=false;});
       clear(true); if (board.current) board.current.visible = false;
       gl.xr.getSession()?.removeEventListener('visibilitychange', visibility);
@@ -234,6 +251,18 @@ export function XRInteraction({ lab, dispatch, onRenderer, onPresenting, onHint,
       const pad = (side: XRHandedness) => hands.find(h => h.tracked && h.source?.handedness === side)?.source?.gamepad ?? null;
       const pads = { left: pad('left'), right: pad('right') };
       const left = hands.findIndex(h => h.tracked && h.source?.handedness === 'left');
+      const cap = scene.getObjectByName('mb6-filling-hand-cap');
+      if (cap) {
+        const right = hands.findIndex(h => h.tracked && h.source?.handedness === 'right');
+        cap.visible = right >= 0;
+        if (right >= 0) {
+          cap.position.copy(grips[right].localToWorld(new Vector3(0, .01, -.08)));
+          cap.quaternion.copy(grips[right].getWorldQuaternion(new Quaternion()));
+        }
+      }
+      hands.forEach((hand, i) => {
+        if (hand.tracked && hand.down && hand.filling) hand.filling.move(cap?.visible && hand.source?.handedness === 'right' ? cap.position : point(i));
+      });
       const menu = left >= 0 && clipboardHeld(pads.left) && !grab && !hands.some(h => h.down && h.target?.boxId !== undefined);
       if (board.current) {
         board.current.visible = menu;

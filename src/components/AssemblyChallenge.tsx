@@ -45,7 +45,7 @@ export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>v
     return()=>clearInterval(id);
   },[started,finished,complete]);
   // A laboratory reset cancels an attempt without adding a score.
-  useEffect(()=>{if(lab.practice){setStarted(null);setFinished(false);setSaved(false);setFallback(false);}},[lab.practice]);
+  useEffect(()=>{if(lab.practice || lab.filling){setStarted(null);setFinished(false);setSaved(false);setFallback(false);}},[lab.practice,lab.filling]);
   const first=lab.boxes[0];
   useEffect(()=>{
     if(starting.current){starting.current=false;return;}
@@ -60,6 +60,7 @@ export function AssemblyChallenge({lab,dispatch}:{lab:Lab;dispatch:(a:Action)=>v
     setScores(next);setSaved(true);
     try{sessionStorage.setItem(cacheKey,JSON.stringify(next));}catch{/* In-memory scores remain available. */}
   };
+  if (lab.filling) return null;
   return <group>
     <group position={[-.85,0,3]} rotation={[0,Math.PI / 2,0]}>
       <mesh position={[0,.055,0]}><boxGeometry args={[1.25,.11,.75]}/><meshStandardMaterial color="#142532" metalness={.5} roughness={.4}/></mesh>
