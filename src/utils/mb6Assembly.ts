@@ -39,8 +39,9 @@ export const nextWall = (walls: boolean[], raising: boolean) => (raising ? ASSEM
 export type Pose = { x: number; y: number; z: number; yaw: number };
 export type LeverStep = 'lift' | 'slide' | 'lower';
 export type Assembly = { id: number; walls: boolean[]; locks: boolean[]; leverRaised: boolean[]; bolts: boolean[]; lid: boolean; pose: Pose; support: number | null; restingOn?: number | null };
-export type Lab = { boxes: Assembly[]; selected: number; message: string; practice?: boolean };
-export type Action = { type: 'select'; id: number } | { type: 'wall'; index: number } | { type: 'lever'; index: number; step: LeverStep } | { type: 'lid' | 'add' | 'prepare-test' | 'reset' | 'stack' | 'unstack' } | { type: 'move' | 'drop'; pose: Pose };
+export type FillingStage = 'assembly' | 'lowering' | 'connect' | 'filling' | 'full' | 'cap' | 'sealed';
+export type Lab = { boxes: Assembly[]; selected: number; message: string; practice?: boolean; filling?: FillingStage };
+export type Action = { type: 'select'; id: number } | { type: 'wall'; index: number } | { type: 'lever'; index: number; step: LeverStep } | { type: 'lid' | 'add' | 'prepare-test' | 'reset' | 'stack' | 'unstack' | 'start-filling' | 'advance-filling' } | { type: 'move' | 'drop'; pose: Pose };
 export const createBox = (id: number): Assembly => ({ id, walls: [false, false, false, false], locks: [false, false, false, false], leverRaised: [false, false, false, false], bolts: [false, false, false, false], lid: true, pose: { x: id === 1 ? -0.8 : -0.8 + MB6.w + 1, y: 0, z: 0, yaw: 0 }, support: null });
 export const boxHeight = (box: Assembly) => box.walls.some(Boolean) ? MB6.h : MB6_VISUAL_COLLAPSED;
 export const leverGesture = (dx: number, dy: number): LeverStep => Math.abs(dx) > Math.abs(dy) ? 'slide' : dy < 0 ? 'lift' : 'lower';
@@ -103,10 +104,26 @@ export function supportedPose(box: Assembly, pose: Pose, boxes: Assembly[]): Pos
   return pose;
 }
 export function reduceLab(state: Lab, action: Action): Lab {
+  if (action.type === 'start-filling') return { ...initialLab(), filling: 'assembly', message: 'Retire a tampa, monte as portas e feche os quatro ferrolhos para iniciar o envase.' };
+  if (action.type === 'advance-filling' && state.filling) {
+    const next = {
+      assembly: null,
+      lowering: ['connect', 'Segure o terminal e abaixe a mangueira até encaixar no bocal azul.'],
+      connect: ['filling', 'Mangueira conectada. Enchendo com purê de tomate…'],
+      filling: ['full', 'Saco cheio. Segure o terminal e levante a mangueira para desconectar.'],
+      full: ['cap', 'Leve a tampa plástica ao bocal azul para fechar.'],
+      cap: ['sealed', 'Envase concluído. Bocal fechado.'],
+      sealed: null,
+    } as const;
+    const step = next[state.filling];
+    return step ? { ...state, filling: step[0], message: step[1] } : state;
+  }
   if (action.type === 'prepare-test') return { boxes: [1,2].map(id=>({...createBox(id),walls:[true,true,true,true],locks:[true,true,true,true],bolts:[true,true,true,true]})), selected:2, practice:true, message:'Teste: duas caixas montadas e travadas. Pegue a caixa 2 para empilhar.' };
   if (action.type === 'reset') return initialLab();
   if (action.type === 'select') return state.boxes.some(b => b.id === action.id) ? { ...state, selected: action.id } : state;
   const fail = (message: string) => ({ ...state, message });
+  if (state.filling && (['add', 'move', 'drop', 'stack', 'unstack'].includes(action.type)
+    || (state.filling !== 'assembly' && ['lid', 'wall', 'lever'].includes(action.type)))) return state;
   if (action.type === 'add') {
     if (state.boxes.length >= 2) return fail('O laboratório permite duas caixas.');
     const first = state.boxes[0];
@@ -118,6 +135,9 @@ export function reduceLab(state: Lab, action: Action): Lab {
   const b = state.boxes.find(box => box.id === state.selected)!;
   const update = (next: Assembly, message: string): Lab => {
     const result = { ...state, boxes: state.boxes.map(box => box.id === b.id ? next : box), message };
+    if (state.filling === 'assembly' && !next.lid && next.walls.every(Boolean) && next.locks.every(Boolean)) {
+      return { ...result, filling: 'lowering', message: 'Quatro ferrolhos fechados. A mangueira está descendo.' };
+    }
     return next.id === 1 && ready(next) && state.boxes.length === 1 ? reduceLab(result, { type: 'add' }) : result;
   };
   if (state.boxes.some(box => (box.support === b.id || box.restingOn === b.id))) return fail('Desempilhe a caixa superior antes de alterar a base.');

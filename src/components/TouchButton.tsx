@@ -14,11 +14,11 @@ export function PanelText({text,width,height,position=[0,0,0],color='#122937'}:{
   useEffect(()=>()=>texture.dispose(),[texture]);
   return <mesh position={position}><planeGeometry args={[width,height]}/><meshBasicMaterial map={texture} toneMapped={false}/></mesh>;
 }
-export function TouchButton({text,position,width=.52,height=.17,color='#087c70',disabled=false,onPress}:{text:string;position:Vec;width?:number;height?:number;color?:string;disabled?:boolean;onPress:()=>void}) {
+export function TouchButton({text,position,width=.52,height=.17,color='#087c70',disabled=false,walkable=false,onPress}:{text:string;position:Vec;width?:number;height?:number;color?:string;disabled?:boolean;walkable?:boolean;onPress:()=>void}) {
   const root=useRef<Group>(null),cap=useRef<Group>(null);const {gl}=useThree();
-  const data=useMemo(()=>({xrTouch:true,width,height,pressed:false,disabled,onPress}),[width,height,disabled,onPress]);
+  const data=useMemo(()=>({xrTouch:true,width,height,pressed:false,disabled,onPress,desktopGesture:disabled || !walkable ? undefined : {hint:text,hover:()=>undefined,finish:onPress}}),[width,height,disabled,onPress,text,walkable]);
   useFrame((_,dt)=>{if(cap.current)cap.current.position.z+=( (root.current?.userData.pressed ? -.022 : 0)-cap.current.position.z)*Math.min(1,dt*25);});
-  return <group ref={root} position={position} userData={data} onClick={e=>{e.stopPropagation();if(!gl.xr.isPresenting && !disabled)onPress();}}>
+  return <group ref={root} position={position} userData={data} onClick={e=>{e.stopPropagation();if(!gl.xr.isPresenting && document.pointerLockElement !== gl.domElement && !disabled)onPress();}}>
     <mesh position={[0,0,-.025]}><boxGeometry args={[width+.035,height+.035,.07]}/><meshStandardMaterial color="#0a141e" metalness={.5} roughness={.35}/></mesh>
     <group ref={cap}>
       <mesh><boxGeometry args={[width,height,.06]}/><meshStandardMaterial color={disabled?'#46515b':color} roughness={.35}/></mesh>
