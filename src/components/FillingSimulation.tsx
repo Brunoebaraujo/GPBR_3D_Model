@@ -141,7 +141,8 @@ export function FillingSimulation({ lab, dispatch, walking }: { lab: Lab; dispat
       cap.current.position.copy(camera.localToWorld(capOffset.set(.27, -.20, -.7)));
       cap.current.quaternion.copy(camera.quaternion);
     }
-    if (stage === 'cap' || stage === 'sealed') travel.current = Math.min(WAREHOUSE.height - .25, travel.current + dt * 3);
+    if (stage === 'cap') travel.current = mouth - nozzleHeight - .02;
+    if (stage === 'sealed') travel.current = Math.min(WAREHOUSE.height - .25, travel.current + dt * 3);
     if (nozzle.current) nozzle.current.position.y = travel.current;
     if (cable.current) {
       cable.current.position.y = travel.current + nozzleHeight - .015;
